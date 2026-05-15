@@ -37,6 +37,16 @@ Docs are grouped by role. Paths are relative to the `context_optimizer/` project
 | [removal_vs_compression.md](research/cache/removal_vs_compression.md) | Drop vs summarize |
 | [provider_caching_comparison.md](research/cache/provider_caching_comparison.md) | Provider-by-provider comparison |
 
+## Temporary handoffs (`temp/` — local only)
+
+Directory **`docs/temp/`** is **gitignored**. Use it for short-lived work orders you give to another agent session:
+
+Example slugs: `TEMP_phase1_task1_1_noise_stripping.md` (repurposed brief: **offline A/B harness v1** + noise-strip as first strategy), `TEMP_<feature>.md`.
+2. That session implements only what the file scopes, updates `docs/research/` or `implementation/` master docs only if instructed, then **pastes results back here** or opens a PR.
+3. Delete the **`TEMP_*.md`** file when merged or superseded — do not duplicate long specs in committed docs.
+
+Tracked layout lives in **`implementation/IMPLEMENTATION_PLAN.md`**; temp files stay small and disposable.
+
 ## Implementation (`implementation/`)
 
 | File | Purpose |

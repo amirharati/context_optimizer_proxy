@@ -55,3 +55,6 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# --- Local handoff / scratch (TEMP_*.md — not committed; see docs/README.md)
+docs/temp/
