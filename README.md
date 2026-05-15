@@ -3,6 +3,49 @@
 A smart proxy for reducing LLM API costs by intelligently compressing conversation context.
 
 ================================================================================
+## Install
+================================================================================
+
+**Requirements:** Python 3.11+ recommended (match what you use for FastAPI / uvicorn).
+
+From the repository root, use the project folder that contains `main.py` and `requirements.txt`:
+
+```bash
+cd context_optimizer
+```
+
+Create a virtual environment (recommended):
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate          # macOS / Linux
+# .venv\Scripts\activate           # Windows
+```
+
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+Configure secrets from the template (see **Configuration** later for optional flags):
+
+```bash
+cp .env.example .env
+# Edit .env: OPENROUTER_API_KEY=...  and, if you use direct Claude routing, ANTHROPIC_API_KEY=...
+```
+
+Run the server:
+
+```bash
+python main.py
+```
+
+By default this binds to `127.0.0.1` and port `8000`; override with `HOST` / `PORT` in the environment if needed. For Cursor, you often need a public URL (e.g. `ngrok http 8000`) because the IDE may block `localhost` for custom OpenAI endpoints.
+
+Documentation index (planning vs research vs cache notes): **`docs/README.md`**.
+
+================================================================================
 ## WHAT IS THIS?
 ================================================================================
 
@@ -120,30 +163,25 @@ This proxy implements a multi-phase compression strategy:
 ## QUICK START
 ================================================================================
 
-1. Install dependencies:
-   pip install -r requirements.txt
+1. Follow **Install** above (venv, `pip install -r requirements.txt`, `.env` from `.env.example`).
 
-2. Copy environment template:
-   cp .env.example .env
-
-3. Add your API keys to .env:
-   OPENROUTER_API_KEY=your_key_here
-   ANTHROPIC_API_KEY=your_key_here  # Optional, for direct Claude access
-
-4. Start the proxy:
+2. Start the proxy (from `context_optimizer` with venv activated):
+   ```bash
    python main.py
-   
-   # Or with ngrok (required for Cursor):
+   ```
+   If Cursor cannot use `localhost`, expose it (example):
+   ```bash
    ngrok http 8000
-   # Use the ngrok URL in Cursor settings
+   ```
+   Use that public base URL wherever you configure the OpenAI-compatible endpoint (append `/v1` as needed).
 
-5. Configure Cursor:
-   - Settings > Models > OpenAI API Key section
-   - Add custom endpoint: http://localhost:8000/v1 (or ngrok URL)
-   - Use model names like: co-gpt-4o, co-claude-sonnet-4-5, etc.
+3. Configure Cursor:
+   - Settings → Models → OpenAI API Key / custom endpoint section
+   - Base URL: `http://localhost:8000/v1` or `https://<your-ngrok-host>/v1`
+   - Use model aliases such as: `co-gpt-4o`, `co-claude-sonnet-4-5`, etc.
 
-6. View session logs:
-   Open browser: http://localhost:8000/ui
+4. Optional: open the session UI in a browser:
+   `http://localhost:8000/ui`
 
 
 ================================================================================
@@ -151,33 +189,35 @@ This proxy implements a multi-phase compression strategy:
 ================================================================================
 
 docs/
-├── goal.md                          - Problem statement and requirements
-├── design.md                        - System architecture
-├── backlog.md                       - Deferred features
-├── IMPLEMENTATION_PLAN.md           - Phase-by-phase implementation guide
-│
-├── compression_research.md          - Analysis of real session data
-│                                      (9 findings, savings estimates)
-│
-├── terminology.md                   - Session/turn/round definitions
-├── logging_guide.md                 - How to use session logging
-│
-├── prompt_caching_explained.md      - How LLM caching works (KV cache)
-├── cache_granularity.md             - Token-level cache matching
-├── cache_boundaries_explained.md    - Explicit cache markers (Anthropic)
-├── cache_ttl_behavior.md            - 5-minute TTL, reset on access
-├── proxy_boundary_management.md     - How proxy manages cache boundaries
-├── removal_vs_compression.md        - Full removal vs. summarization
-├── provider_caching_comparison.md   - Anthropic/OpenAI/Google/OpenRouter
-│
-└── ab_testing_strategy.md           - Automated testing framework
+├── README.md                        - Index / where to start
+├── planning/
+│   ├── goal.md                      - Problem statement and requirements
+│   ├── design.md                    - System architecture (overview)
+│   ├── backlog.md                   - Deferred features
+│   └── fixes_2026-05-15.md         - Session notes / fixes log
+├── guides/
+│   ├── terminology.md               - Session vs turn vs round
+│   └── logging_guide.md             - Session logging modes and disk use
+├── research/
+│   ├── compression_research.md      - Findings from real sessions
+│   ├── ab_testing_strategy.md       - Experimental testing plan
+│   └── cache/                       - Prompt caching engineering notes
+│       ├── prompt_caching_explained.md
+│       ├── cache_granularity.md
+│       ├── cache_boundaries_explained.md
+│       ├── cache_ttl_behavior.md
+│       ├── proxy_boundary_management.md
+│       ├── removal_vs_compression.md
+│       └── provider_caching_comparison.md
+└── implementation/
+    └── IMPLEMENTATION_PLAN.md         - Phased build order and tasks
 
 
 ================================================================================
 ## KEY INSIGHTS FROM RESEARCH
 ================================================================================
 
-From analyzing real agentic sessions (see docs/compression_research.md):
+From analyzing real agentic sessions (see `docs/research/compression_research.md`):
 
 1. Tool noise: 8% of history is boilerplate we can safely strip
 2. Path compression: 3.8% savings by aliasing common paths  
@@ -277,7 +317,7 @@ Direct OpenRouter format (if Cursor allows):
 ## COST SAVINGS ESTIMATES
 ================================================================================
 
-Based on research (see docs/compression_research.md):
+Based on research (see `docs/research/compression_research.md`):
 
 Phase 1 (preprocessing):           10-12% token reduction
 Phase 2 (context limits + TTL):    Prevents errors, enables aggressive mode
@@ -311,7 +351,7 @@ Example: 22-turn calculator app session
    - Add context limit safety
    - Test TTL-aware compression strategies
 
-See docs/IMPLEMENTATION_PLAN.md for detailed roadmap.
+See `docs/implementation/IMPLEMENTATION_PLAN.md` for the detailed roadmap.
 
 
 ================================================================================
@@ -337,16 +377,16 @@ MIT License - Use freely, modify as needed.
 ## RESOURCES
 ================================================================================
 
-Documentation: See docs/ folder (especially IMPLEMENTATION_PLAN.md)
+Documentation: Start at `docs/README.md`, then `docs/implementation/IMPLEMENTATION_PLAN.md`.
+
 Session Viewer: http://localhost:8000/ui
-Logs Directory: logs/sessions/
 
-Key research docs:
-- compression_research.md: What to compress and why
-- provider_caching_comparison.md: How each provider handles caching
-- ab_testing_strategy.md: How to test strategies empirically
+Logs Directory: `logs/sessions/` (gitignored — see `.gitignore`)
 
-For questions or issues, see the comprehensive documentation in docs/.
+Key docs:
+- `docs/research/compression_research.md` — What to compress and why
+- `docs/research/cache/provider_caching_comparison.md` — Provider caching behavior
+- `docs/research/ab_testing_strategy.md` — How to test strategies empirically
 
 
 ================================================================================
