@@ -1,4 +1,4 @@
-# Context Optimizer
+# Context Optimizer Proxy
 
 A smart proxy for reducing LLM API costs by intelligently compressing conversation context.
 
@@ -51,8 +51,7 @@ Documentation index (planning vs research vs cache notes): **`docs/README.md`**.
 
 Context Optimizer is a local HTTP proxy that sits between Cursor IDE (or any
 OpenAI-compatible client) and LLM providers. It automatically compresses long
-conversation histories before sending them to expensive models, potentially
-saving 90%+ on API costs.
+conversation histories before sending them to expensive models (The idea is reduce my LLM usage cost so we see how much it saves once we finish this project).
 
 Think of it as a "smart middleware" that:
 - Strips noise from tool outputs
@@ -314,24 +313,6 @@ Direct OpenRouter format (if Cursor allows):
 
 
 ================================================================================
-## COST SAVINGS ESTIMATES
-================================================================================
-
-Based on research (see `docs/research/compression_research.md`):
-
-Phase 1 (preprocessing):           10-12% token reduction
-Phase 2 (context limits + TTL):    Prevents errors, enables aggressive mode
-Phase 3 (boundary compression):    20-30% additional savings
-Phase 4 (optimal strategies):      Provider-specific tuning
-Phase 5 (dynamic routing):         90%+ total cost reduction
-
-Example: 22-turn calculator app session
-- Without optimization: 374K tokens on Opus = $5.61
-- With full optimization: 156K tokens routed intelligently = $0.17
-- Savings: 97%
-
-
-================================================================================
 ## NEXT STEPS
 ================================================================================
 
@@ -358,7 +339,7 @@ See `docs/implementation/IMPLEMENTATION_PLAN.md` for the detailed roadmap.
 ## CONTRIBUTING
 ================================================================================
 
-This is a personal tool/research project. If you find it useful:
+This is a personal tool/research project (for now). If you find it useful:
 
 1. Star the repo
 2. Share your session analysis findings
