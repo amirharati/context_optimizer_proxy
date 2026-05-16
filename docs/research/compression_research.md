@@ -35,6 +35,46 @@ Analysis based on 2 real agentic sessions captured via the proxy logger.
 
 ---
 
+## Finding 1b — Vertical whitespace & commented code (tool output only)
+
+**What:** Source and tool output often contain extra vertical padding (blank lines, lines with only spaces) and sometimes large blocks of commented-out code. Stripping these before the payload reaches the model can shave tokens with almost no semantic loss — but savings are **small per file** and only add up over many reads or long sessions.
+
+**Empty / whitespace lines:**
+
+| Action | Typical savings | Risk |
+|---|---|---|
+| Collapse 2+ consecutive blank lines → 1 | ~0–1 token per removed `\n` | Very low if applied to **tool_result text only** |
+| Trim trailing spaces per line | Small | Low |
+| Remove **all** newlines in Python | N/A | **Breaks syntax** — do not do this on real source |
+
+**Rule of thumb:** ~**4 chars ≈ 1 token** (our estimator). One extra blank line is often **~0–1 token**; 100 blank lines in a repeated `Read` might save **~25–100 tokens** — noticeable in huge logs, not next to a 4k-token shell dump.
+
+**Commented code (optional, higher risk):**
+
+- **Maybe useful** when tool output is clearly *for reading* (e.g. `Read` of a file the model is inspecting), not when it is the payload for `Write` / `StrReplace`.
+- **Do not strip comments from tool *inputs*** or from content the user asked to keep — that would change what gets written to disk and violates “don’t remove lines from the user’s code.”
+- **Line-number problem:** If we drop commented lines without a **line map** (`original_line → compressed_line`), any message like “fix line 42” or stack traces with line numbers become wrong. Safer options:
+  - Only collapse blank lines (preserve line numbers), or
+  - Strip comments but prefix each kept line with `L123:` (heavy), or
+  - Defer comment stripping until we have explicit line mapping.
+
+**Where to apply:** Same boundary as Finding 1 — **`tool_result` content blocks only** (and similar read-only context), never user messages, never assistant text, never `tool_use` arguments that will be executed or written.
+
+**Implementation sketch (Layer 1, optional):**
+
+```python
+def compress_vertical_whitespace(text: str) -> str:
+    # Collapse 3+ newlines to 2; strip trailing whitespace per line
+    ...
+
+# Comment stripping: OFF by default; enable only with line-preserving strategy
+ENABLE_COMMENT_STRIP_IN_TOOL_RESULTS=false
+```
+
+**Status:** Not yet implemented. **Priority:** low — add after noise/path stripping; validate on A/B `Read`-heavy scenarios. Good “long tail” win, not a primary lever.
+
+---
+
 ## Finding 2 — Path stem repetition
 
 **What:** The base path `/Users/amir/Dropbox/CodingProjects` (36 chars) repeats on every file path in tool calls, tool results, and assistant messages.
@@ -128,6 +168,7 @@ Analysis based on 2 real agentic sessions captured via the proxy logger.
 ```
 Layer 1 — Always on, free (<1ms, pure regex)
   • Strip noise patterns from tool results (saves ~8%)
+  • Collapse extra blank lines / trim trailing whitespace in tool results (small; accumulates on long sessions)
   • Replace path stem /Users/amir/Dropbox/CodingProjects → $C (saves ~2.4%)
   • Replace workspace root → $W (saves ~1.4%)
   Total guaranteed savings: ~12%, zero LLM cost
@@ -289,6 +330,7 @@ Combined with Layer 1 (noise + paths): potentially **~50% reduction on system pr
 | **Phase 1: Data Collection** | — | Enhanced session logging | — | No | Add metadata: task keywords, file counts, model performance |
 | **Phase 2: Deterministic (safe, immediate)** |
 | 1 | 1 | Strip tool noise (8 patterns) | ~8% of history | No | Safe, pure regex, zero risk |
+| 1b | 1 | Collapse blank lines / trim WS (tool results) | Small; long-session tail | No | Do not strip all `\n`; comment strip needs line map |
 | 2 | 1 | Path stem → `$C` / workspace → `$W` | ~3.8% of history | No | Combine with noise |
 | 3 | 1 | Dedupe stale file reads | Variable | No | Improves quality, removes confusion |
 | **Phase 3: Prompt optimization (needs minimal data)** |

@@ -169,16 +169,19 @@ async def chat_completions(request: Request):
         except Exception as e:
             print(f"[PROXY] Warning: Strategy {strategy} failed: {e}")
     
+    # Extract disable_default_logging from headers
+    disable_default_logging = request.headers.get("x-proxy-disable-default-logging", "false").lower() == "true"
+
     # 3. Evaluate and Compress the Context
     bypass = os.getenv("BYPASS_COMPRESSION", "false").lower() == "true"
     if bypass:
         compressed_messages, was_compressed, orig_tokens, comp_tokens = messages, False, 0, 0
         print(f"[PROXY] Compression BYPASSED (BYPASS_COMPRESSION=true)")
     else:
-        compressed_messages, was_compressed, orig_tokens, comp_tokens = process_and_compress_context(messages)
+        compressed_messages, was_compressed, orig_tokens, comp_tokens = process_and_compress_context(messages, disable_default_logging=disable_default_logging)
     
     # 4. Log the savings if compression occurred
-    if was_compressed:
+    if was_compressed and not disable_default_logging:
         cheap_model = os.getenv("CHEAP_MODEL_NAME", "openrouter/google/gemini-flash-1.5")
         log_token_savings(
             expensive_model=requested_model,
@@ -242,6 +245,9 @@ async def chat_completions(request: Request):
                 if actual_usage and "total_tokens" in actual_usage:
                     tokens = actual_usage["total_tokens"]
                     
+                # Extract disable_default_logging from headers
+                disable_default_logging = request.headers.get("x-proxy-disable-default-logging", "false").lower() == "true"
+                    
                 session_logger.log_turn(
                     msgs_to_log, 
                     requested_model, 
@@ -251,6 +257,7 @@ async def chat_completions(request: Request):
                     session_key=session_key,
                     system=system_prompt,
                     tools=body.get("tools"),
+                    disable_default_logging=disable_default_logging
                 )
             except Exception as log_e:
                 print(f"[ERROR] Session logging failed: {log_e}")
@@ -259,9 +266,10 @@ async def chat_completions(request: Request):
         print(f"[ERROR] Logging preparation failed: {e}")
         return {"error": f"Logging preparation failed: {e}"}
 
-    # Dump full request body for debugging
-    import pathlib
-    pathlib.Path("logs/last_request.json").write_text(json.dumps(body, indent=2))
+    # Dump full request body for debugging (skip if disabled)
+    if not disable_default_logging:
+        import pathlib
+        pathlib.Path("logs/last_request.json").write_text(json.dumps(body, indent=2))
 
     # --- ROUTING: Anthropic models → Anthropic API directly; everything else → OpenRouter ---
     # Cursor sends requests in Anthropic's native format for Claude models (messages with

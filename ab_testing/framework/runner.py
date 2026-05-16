@@ -196,6 +196,9 @@ class TestRunner:
             session_key = f"{scenario_safe}__{strategy_name}__r{self.run_index:03d}"
             headers["x-proxy-session-key"] = session_key
             
+            # Tell proxy NOT to log to its default logs/ folder, only to our custom_log_dir
+            headers["x-proxy-disable-default-logging"] = "true"
+            
             # Send to proxy
             try:
                 response = self.client.post(

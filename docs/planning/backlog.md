@@ -11,7 +11,7 @@ Cursor sends massive contexts (entire code files) repeatedly with almost every r
 2. **File Compression:** Automatically compress log files using `tar.gz` or `.jsonl.gz`. While this helps, it still stores redundant data.
 3. **Conditional Logging:** Only write to the log during turns where the proxy actually decides to trigger a summarization event, ignoring standard short chats.
 
-*Status: Deferred to focus on getting the core proxy streaming and OpenRouter integration working.*
+*Status: Partially implemented. We have full session logging, minimal logging toggles, date-based folder organization, and A/B test isolation. Deep deduplication is deferred.*
 
 ## 2. Simple Dashboard / UI
 **Goal:** A web-based interface (e.g., using FastAPI's built-in Jinja templates or a lightweight frontend) to manage and monitor the proxy.
@@ -20,7 +20,7 @@ Cursor sends massive contexts (entire code files) repeatedly with almost every r
 - **Recent Context Debugger:** A view showing the raw JSON payload of the last `N` (e.g., 5) requests from Cursor alongside their compressed counterparts. This helps debug what Cursor is actually sending and tune the compression rules. (These logs will be kept in a small, rotating buffer file so they don't eat disk space).
 - **Dynamic Configuration:** Allow changing the cheap summarizer model on the fly without editing the `.env` file.
 - **Rule Editor:** A text area to write or tweak the custom Python compression rules dynamically without restarting the server.
-*Status: Added to backlog for a future V2 iteration.*
+*Status: Partially implemented. We have a robust session viewer UI (`ui.py`) that supports both live proxy logs and A/B test runs. Dynamic config/rule editing is deferred to V2.*
 
 ## 3. Context Size Management & Auto-Retry with Compression
 **Goal:** Never let session size grow beyond model context limit; handle "prompt too long" errors gracefully with automatic compression and retry.

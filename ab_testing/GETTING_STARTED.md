@@ -22,10 +22,10 @@ context_optimizer/
    │  └─ README.md
    │
    ├─ tests/                       (test scripts)
-   │  ├─ test_strategy_direct.py   (free, instant)
-   │  ├─ test_full_endtoend.py     (free, instant)
-   │  ├─ test_walkthrough.py       (real API)
-   │  ├─ test_interactive.py       (interactive)
+   │  ├─ 1_local_regex_test.py   (free, instant)
+   │  ├─ 2_local_simulation_test.py     (free, instant)
+   │  ├─ 3_proxy_api_test.py       (real API)
+   │  ├─ run_interactive.py       (interactive)
    │  └─ run_ab_test.py
    │
    ├─ scenarios/                   (test scenarios)
@@ -52,18 +52,18 @@ cat docs/QUICKSTART.md
 
 # Run free test
 cd tests
-python test_strategy_direct.py
+python 1_local_regex_test.py
 
 # Run interactive test (choose model)
-python test_interactive.py
+python run_interactive.py
 ```
 
 ## 📊 Key Results
 
 **Noise Stripping Compression:**
-- Input tokens: 265 → 130
-- Savings: 135 tokens (46.6% reduction)
-- Cost: $0.000021 saved
+- Input tokens: [Baseline] → [Compressed]
+- Savings: Measurable reduction (exact numbers in future reports)
+- Cost: Savings scale with usage
 
 ## 📚 Documentation
 
@@ -105,7 +105,7 @@ python ab_testing/tests/run_interactive.py
 
 1. Copy a scenario: `cp ab_testing/scenarios/simple_shell_noise.json ab_testing/scenarios/my_test.json`
 2. Edit the JSON with your tools and responses
-3. Run: `python ab_testing/tests/test_interactive.py`
+3. Run: `python ab_testing/tests/run_interactive.py`
 4. Select your scenario
 
 ## 🔧 Adding New Strategies
@@ -113,7 +113,7 @@ python ab_testing/tests/run_interactive.py
 1. Edit `ab_testing/framework/strategies.py`
 2. Add function: `def my_strategy(messages): ...`
 3. Register in `STRATEGIES` dict
-4. Test: `python ab_testing/tests/test_strategy_direct.py`
+4. Test: `python ab_testing/tests/1_local_regex_test.py`
 
 ## 📊 What's Inside
 

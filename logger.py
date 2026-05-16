@@ -49,6 +49,8 @@ class SessionLogger:
         self._session_id: str | None = None
         self._turn: int = 0
         self._first_msg_hash: str | None = None
+        self._session_date: str | None = None
+        self._session_time: str | None = None
 
     def _msg_hash(self, messages: list) -> str:
         """Hash the first message content to identify a session."""
@@ -65,7 +67,7 @@ class SessionLogger:
             return False
         return self._msg_hash(messages) == self._first_msg_hash
 
-    def log_turn(self, messages: list, model: str, token_count: int, force_full_logging: bool = False, custom_log_dir: str = None, session_key: str = None, system: str = None, tools: list = None) -> tuple[str, int]:
+    def log_turn(self, messages: list, model: str, token_count: int, force_full_logging: bool = False, custom_log_dir: str = None, session_key: str = None, system: str = None, tools: list = None, disable_default_logging: bool = False) -> tuple[str, int]:
         """
         Log one proxy turn. Returns (session_id, turn_number).
         
@@ -87,6 +89,9 @@ class SessionLogger:
                 self._session_id = session_key
                 self._turn = 1
                 self._first_msg_hash = self._msg_hash(messages)
+                now = datetime.now()
+                self._session_date = now.strftime("%Y-%m-%d_%b_%d") # e.g. 2026-05-16_May_16
+                self._session_time = now.strftime("%H-%M-%S")
             else:
                 self._turn += 1
         elif self._is_continuation(messages):
@@ -95,14 +100,32 @@ class SessionLogger:
             self._session_id = uuid.uuid4().hex[:8]
             self._turn = 1
             self._first_msg_hash = self._msg_hash(messages)
+            now = datetime.now()
+            self._session_date = now.strftime("%Y-%m-%d_%b_%d")
+            self._session_time = now.strftime("%H-%M-%S")
+
+        # Fallback if somehow missing
+        if not self._session_date:
+            now = datetime.now()
+            self._session_date = now.strftime("%Y-%m-%d_%b_%d")
+            self._session_time = now.strftime("%H-%M-%S")
 
         out_dir = SESSIONS_DIR
         if custom_log_dir:
             # If custom_log_dir is provided, put it under LOG_DIR
             out_dir = os.path.join(LOG_DIR, custom_log_dir)
             os.makedirs(out_dir, exist_ok=True)
+            session_file = os.path.join(out_dir, f"session_{self._session_id}.jsonl")
+        else:
+            # Group default sessions by date
+            out_dir = os.path.join(SESSIONS_DIR, self._session_date)
+            os.makedirs(out_dir, exist_ok=True)
+            session_file = os.path.join(out_dir, f"session_{self._session_time}_{self._session_id}.jsonl")
 
-        session_file = os.path.join(out_dir, f"session_{self._session_id}.jsonl")
+        # If disable_default_logging is true and we don't have a custom dir, skip writing
+        if disable_default_logging and not custom_log_dir:
+            print(f"[SESSION:SKIPPED] {self._session_id} turn={self._turn} msgs={len(messages)} ~{token_count}tok → {model}")
+            return self._session_id, self._turn
 
         entry = {
             "session_id": self._session_id,

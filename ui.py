@@ -47,7 +47,7 @@ async def list_runs():
             continue
         sessions_dir = d / "sessions"
         report_file = d / "report.json"
-        session_count = len(list(sessions_dir.glob("session_*.jsonl"))) if sessions_dir.exists() else 0
+        session_count = len(list(sessions_dir.rglob("session_*.jsonl"))) if sessions_dir.exists() else 0
         runs.append({
             "id": d.name,
             "session_count": session_count,
@@ -63,7 +63,8 @@ async def list_sessions(source: str | None = Query(None)):
     if not sessions_dir.exists():
         return JSONResponse([])
     sessions = []
-    for f in sorted(sessions_dir.glob("session_*.jsonl"), key=lambda p: p.stat().st_mtime):
+    # Use rglob to find sessions in date subfolders or root
+    for f in sorted(sessions_dir.rglob("session_*.jsonl"), key=lambda p: p.stat().st_mtime):
         turns = []
         with open(f, encoding="utf-8") as fh:
             for line in fh:
@@ -88,9 +89,15 @@ async def list_sessions(source: str | None = Query(None)):
 @router.get("/sessions/{session_id}")
 async def get_session(session_id: str, source: str | None = Query(None)):
     sessions_dir = _resolve_sessions_dir(source)
-    path = sessions_dir / f"session_{session_id}.jsonl"
-    if not path.exists():
+    
+    # Find the session file, which might be in a date subfolder
+    target_file = f"session_{session_id}.jsonl"
+    found_paths = list(sessions_dir.rglob(target_file))
+    
+    if not found_paths:
         return JSONResponse({"error": "not found"}, status_code=404)
+        
+    path = found_paths[0]
     turns = []
     with open(path, encoding="utf-8") as f:
         for line in f:

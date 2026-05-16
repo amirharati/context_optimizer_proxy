@@ -57,16 +57,16 @@ See **TOOL_COMPARISON.md** for full comparison with Cursor's 19 tools.
 ### First Time Setup
 ```bash
 1. Read QUICKSTART.md (5 min)
-2. Run: python test_strategy_direct.py (instant)
-3. Run: python test_full_endtoend.py (instant)
-4. Run: python test_interactive.py (interactive)
+2. Run: python 1_local_regex_test.py (instant)
+3. Run: python 2_local_simulation_test.py (instant)
+4. Run: python run_interactive.py (interactive)
 ```
 
 ### Creating Custom Tests
 ```bash
 1. Copy scenarios/simple_shell_noise.json → scenarios/my_test.json
 2. Edit your scenario JSON
-3. Run: python test_interactive.py and select your scenario
+3. Run: python run_interactive.py and select your scenario
 ```
 
 ### Production Integration
@@ -82,28 +82,28 @@ See **TOOL_COMPARISON.md** for full comparison with Cursor's 19 tools.
 
 ## File Details
 
-### 🔴 test_strategy_direct.py
+### 🔴 1_local_regex_test.py
 **What it does:** Tests noise stripping without any external calls
 **Time:** <1 second
 **Cost:** $0
 **Good for:** Verifying setup, quick testing
-**Output:** Shows 94.7% character reduction
+**Output:** Shows significant character reduction
 
-### 🟠 test_full_endtoend.py
+### 🟠 2_local_simulation_test.py
 **What it does:** Simulates complete LLM conversation
 **Time:** <1 second
 **Cost:** $0
 **Good for:** Understanding message flow
 **Output:** Baseline vs compressed comparison
 
-### 🟡 test_walkthrough.py
+### 🟡 3_proxy_api_test.py
 **What it does:** Sends real requests to LLM API
 **Time:** 2-5 seconds
 **Cost:** ~$0.0001 per run
 **Good for:** Measuring actual token savings
-**Output:** Real tokens from API: 265 → 130 (46.6% reduction)
+**Output:** Real tokens from API showing measurable reduction
 
-### 🟢 test_interactive.py
+### 🟢 run_interactive.py
 **What it does:** Interactive model and scenario selection
 **Time:** 2-5 seconds (depends on model)
 **Cost:** Depends on model chosen
@@ -114,23 +114,23 @@ See **TOOL_COMPARISON.md** for full comparison with Cursor's 19 tools.
 
 ## Test Output Examples
 
-### test_strategy_direct.py Output
+### 1_local_regex_test.py Output
 ```
 Baseline chars:    550
 Compressed chars:  29
-Savings:           521 chars (94.7%)
+Savings:           Measurable reduction (exact numbers depend on scenario)
 Est. tokens saved: ~130
 ```
 
-### test_walkthrough.py Output
+### 3_proxy_api_test.py Output
 ```
 Input tokens (baseline):    265
 Input tokens (compressed):  130
-Total token savings:        135 tokens (46.6%)
-Cost saved:                 $0.000021
+Total token savings:        Measurable reduction
+Cost saved:                 Varies by scenario length and tool usage
 ```
 
-### test_interactive.py Output
+### run_interactive.py Output
 ```
 SELECT SCENARIO
 1. simple_shell_noise.json - Minimal (2 shell commands)
@@ -152,10 +152,10 @@ SELECT MODEL
 
 | Task | Use This | Time | Cost |
 |------|----------|------|------|
-| Quick validation | test_strategy_direct.py | <1s | $0 |
-| Understand flow | test_full_endtoend.py | <1s | $0 |
-| Measure tokens | test_walkthrough.py | 2-5s | $0.0001 |
-| Try different models | test_interactive.py | 2-5s | varies |
+| Quick validation | 1_local_regex_test.py | <1s | $0 |
+| Understand flow | 2_local_simulation_test.py | <1s | $0 |
+| Measure tokens | 3_proxy_api_test.py | 2-5s | $0.0001 |
+| Try different models | run_interactive.py | 2-5s | varies |
 | Create test case | scenarios/simple_shell_noise.json | N/A | N/A |
 | Add new strategy | ab_test/strategies.py | N/A | N/A |
 
@@ -165,17 +165,17 @@ SELECT MODEL
 
 ### "I want to see if noise stripping works"
 ```bash
-python test_strategy_direct.py
+python 1_local_regex_test.py
 ```
 
 ### "I want real token measurements"
 ```bash
-python test_walkthrough.py
+python 3_proxy_api_test.py
 ```
 
 ### "I want to test a different model"
 ```bash
-python test_interactive.py
+python run_interactive.py
 # Select model at prompt
 ```
 
@@ -183,7 +183,7 @@ python test_interactive.py
 ```bash
 cp scenarios/simple_shell_noise.json scenarios/my_test.json
 # Edit my_test.json
-python test_interactive.py
+python run_interactive.py
 # Select your new scenario
 ```
 
@@ -192,7 +192,7 @@ python test_interactive.py
 # Edit ab_test/strategies.py
 # Add new function
 # Register in STRATEGIES dict
-# Test with: python test_strategy_direct.py
+# Test with: python 1_local_regex_test.py
 ```
 
 ---
@@ -200,24 +200,24 @@ python test_interactive.py
 ## File Dependencies
 
 ```
-test_strategy_direct.py
+1_local_regex_test.py
   ├─ ab_test/strategies.py
   ├─ ab_test/simulator.py
   └─ ab_test/scenario.py
 
-test_full_endtoend.py
+2_local_simulation_test.py
   ├─ ab_test/strategies.py
   ├─ ab_test/simulator.py
   └─ ab_test/scenario.py
 
-test_walkthrough.py
+3_proxy_api_test.py
   ├─ ab_test/strategies.py
   ├─ ab_test/simulator.py
   ├─ ab_test/scenario.py
   ├─ main.py (running on localhost:8000)
   └─ httpx (HTTP client)
 
-test_interactive.py
+run_interactive.py
   ├─ ab_test/scenario.py
   ├─ ab_test/simulator.py
   ├─ ab_test/strategies.py
@@ -235,14 +235,14 @@ main.py
 
 ## Production Checklist
 
-- [ ] Run test_strategy_direct.py ✓
-- [ ] Run test_full_endtoend.py ✓
-- [ ] Run test_walkthrough.py ✓
-- [ ] Measure token savings in test_walkthrough.py
+- [ ] Run 1_local_regex_test.py ✓
+- [ ] Run 2_local_simulation_test.py ✓
+- [ ] Run 3_proxy_api_test.py ✓
+- [ ] Measure token savings in 3_proxy_api_test.py
 - [ ] Review noise_strip strategy in ab_test/strategies.py
 - [ ] Uncomment strategy integration in main.py
 - [ ] Set ENABLE_NOISE_STRIPPING=true in .env
 - [ ] Restart main.py
-- [ ] Test with live proxy: python test_interactive.py
+- [ ] Test with live proxy: python run_interactive.py
 - [ ] Monitor actual API token usage
 

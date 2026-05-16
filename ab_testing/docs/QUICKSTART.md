@@ -33,14 +33,14 @@ Shows noise stripping works without any API interaction:
 
 ```bash
 cd context_optimizer
-python test_strategy_direct.py
+python 1_local_regex_test.py
 ```
 
 **What it does:**
 - Loads scenario
 - Simulates tool calls
 - Applies strategy
-- Shows character savings (94.7%)
+- Shows character savings
 
 **Time:** ~1 second
 **Cost:** $0.00
@@ -53,7 +53,7 @@ Simulates complete LLM conversation (tool calls decided by script, not LLM):
 
 ```bash
 cd context_optimizer
-python test_full_endtoend.py
+python 2_local_simulation_test.py
 ```
 
 **What it does:**
@@ -75,7 +75,7 @@ Sends real requests to proxy and gets actual token counts from LLM API:
 
 ```bash
 cd context_optimizer
-python test_walkthrough.py
+python 3_proxy_api_test.py
 ```
 
 **What it does:**
@@ -88,16 +88,45 @@ python test_walkthrough.py
 **Cost:** ~$0.0001 per run (very cheap)
 **Model used:** `openai/gpt-4o-mini` (default)
 
+### Option 4: Full A/B Testing CLI (BATCH TESTING)
+
+The main tool for running comprehensive A/B tests across strategies and scenarios:
+
+```bash
+cd context_optimizer/ab_testing/tests
+python run_cli.py ../scenarios/simple_shell_noise.json
+```
+
+**What it does:**
+- Runs the full dynamic evaluation loop
+- Tests multiple strategies side-by-side
+- Generates a detailed comparison report
+- Saves artifacts (logs, virtual FS) to a `runs/` directory
+
+**Time:** Varies (depends on scenario length and model)
+**Cost:** Varies (real API calls made)
+
+---
+
+### Option 5: Interactive Runner
+
+Choose scenario and model interactively:
+
+```bash
+cd context_optimizer/ab_testing/tests
+python run_interactive.py
+```
+
 ---
 
 ## Selecting Different Models
 
 You can change the model in several ways:
 
-### Method 1: Using CLI Arguments (for run_ab_test.py)
+### Method 1: Using CLI Arguments (for run_cli.py)
 
 ```bash
-python run_ab_test.py scenarios/simple_shell_noise.json \
+python run_cli.py ../scenarios/simple_shell_noise.json \
   --model "openai/gpt-4o" \
   --max-turns 5 \
   --strategies none noise_strip
@@ -105,10 +134,10 @@ python run_ab_test.py scenarios/simple_shell_noise.json \
 
 ### Method 2: Modify the Script
 
-Edit `test_walkthrough.py` or `test_full_endtoend.py` and change:
+Edit `3_proxy_api_test.py` or `2_local_simulation_test.py` and change:
 
 ```python
-# Current (line in test_walkthrough.py)
+# Current (line in 3_proxy_api_test.py)
 baseline_request = {
     "model": "openai/gpt-4o-mini",
     ...
@@ -198,16 +227,16 @@ Create `scenarios/my_test.json`:
 
 ```bash
 # Direct test
-python test_strategy_direct.py
+python 1_local_regex_test.py
 
 # Full end-to-end (edit script to use your scenario)
-# Change line in test_full_endtoend.py:
+# Change line in 2_local_simulation_test.py:
 # scenario = load_scenario(f"scenarios/my_test.json")
 
 # Real API test (edit script)
-# Change line in test_walkthrough.py:
+# Change line in 3_proxy_api_test.py:
 # scenario = load_scenario("scenarios/my_test.json")
-python test_walkthrough.py
+python 3_proxy_api_test.py
 ```
 
 ---
@@ -253,14 +282,14 @@ For more complex scenarios with multiple turns, edit your scenario JSON:
 
 ### Character Savings (Quick Check)
 ```bash
-python test_strategy_direct.py
-# Shows: "Savings: 521 chars (94.7%)"
+python 1_local_regex_test.py
+# Shows character savings
 ```
 
 ### Token Savings (Real Measurement)
 ```bash
-python test_walkthrough.py
-# Shows actual tokens from API: "Token savings: 139 tokens (46.6%)"
+python 3_proxy_api_test.py
+# Shows actual token savings from API
 ```
 
 ### Cost Impact
@@ -280,17 +309,39 @@ Per conversation (assume 10 tool calls):
 
 To compare multiple strategies (once we add more):
 
+### Using the CLI Runner (`run_cli.py`)
+
+The CLI runner is the primary tool for batch testing and generating reports.
+
 ```bash
-python run_ab_test.py scenarios/simple_shell_noise.json \
-  --strategies none noise_strip path_compression file_dedupe \
+cd context_optimizer/ab_testing/tests
+python run_cli.py ../scenarios/simple_shell_noise.json \
+  --strategies none noise_strip \
   --model openai/gpt-4o-mini \
   --max-turns 5 \
+  --runs 3 \
   --output results.json
 ```
 
-Then check results:
+**Key Arguments:**
+- `scenario`: Path to the scenario JSON file (positional argument)
+- `--all`: Run all scenarios found in the `scenarios/` directory
+- `--model`: Model to use (default: `openai/gpt-4o-mini`)
+- `--strategies`: Space-separated list of strategies to compare (default: `none noise_strip`)
+- `--max-turns`: Maximum conversation turns per run (default: `10`)
+- `--runs`: Number of times to run each scenario for averaging results (default: `1`)
+- `--temperature`: LLM temperature (default: `0.0` for determinism)
+- `--output`: Save results to a specific JSON file (defaults to `runs/run_YYYYMMDD_HHMMSS/report.json`)
+- `--no-full-logging`: Disable full logging of requests (full logging is enabled by default)
+
+**Example: Run all scenarios multiple times to get average savings**
 ```bash
-cat results.json | python -m json.tool
+python run_cli.py --all --runs 3 --model anthropic/claude-3-5-sonnet-20241022
+```
+
+Then check the generated report:
+```bash
+cat runs/run_*/report.json | python -m json.tool
 ```
 
 ---
@@ -313,7 +364,7 @@ curl http://localhost:8000/v1/models | grep model | head -20
 ### High API costs - Script ran too long
 ```bash
 # Limit turns to reduce cost
-python run_ab_test.py scenario.json --max-turns 2
+python run_cli.py ../scenarios/simple_shell_noise.json --max-turns 2
 ```
 
 ### Proxy returns error - Check logs
@@ -328,12 +379,12 @@ tail -50 /tmp/proxy_server.log
 
 1. **Run direct test to verify setup works:**
    ```bash
-   python test_strategy_direct.py
+   python 1_local_regex_test.py
    ```
 
 2. **Run real proxy test to see token savings:**
    ```bash
-   python test_walkthrough.py
+   python 3_proxy_api_test.py
    ```
 
 3. **Create your own scenario** (see section above)

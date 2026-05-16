@@ -39,7 +39,7 @@ def summarize_messages(messages_to_summarize: List[Dict[str, str]]) -> str:
         # If summarization fails, fallback to keeping the raw text (safety net)
         return prompt
 
-def process_and_compress_context(messages: List[Dict[str, Any]]) -> tuple[List[Dict[str, Any]], bool, int, int]:
+def process_and_compress_context(messages: List[Dict[str, Any]], disable_default_logging: bool = False) -> tuple[List[Dict[str, Any]], bool, int, int]:
     """
     Evaluates the message list based on token count, not just message count.
     If it exceeds the threshold, it splits the history:
@@ -105,7 +105,8 @@ def process_and_compress_context(messages: List[Dict[str, Any]]) -> tuple[List[D
     compressed_tokens = estimate_tokens(compressed_text)
     
     # Log the full payloads for debugging (rolling buffer)
-    from logger import log_debug_context
-    log_debug_context(messages, compressed_messages)
+    if not disable_default_logging:
+        from logger import log_debug_context
+        log_debug_context(messages, compressed_messages)
     
     return compressed_messages, True, original_tokens, compressed_tokens

@@ -9,7 +9,7 @@ This package provides infrastructure to test compression strategies using simula
 Test strategies locally without making LLM API calls:
 
 ```bash
-python test_strategy_direct.py
+python 1_local_regex_test.py
 ```
 
 This demonstrates noise stripping on simulated tool results and shows **~95% reduction** in tool output boilerplate.
@@ -128,11 +128,11 @@ Test results show:
 | Strategy | Tool Result Chars | Savings |
 |----------|------------------|---------|
 | Baseline (none) | 550 | 0% |
-| **Noise Strip** | 29 | **94.7%** |
+| **Noise Strip** | Reduced | **Measurable %** |
 
-**Token savings:** ~130 tokens per conversation with 2 shell commands.
+**Token savings:** Measurable token reduction per conversation with shell commands.
 
-**Cost impact:** At $0.15/M input tokens, saves ~$0.000019 per conversation (scales with tool use).
+**Cost impact:** Measurable cost savings per conversation (scales with tool use).
 
 ## Integration with main.py
 
@@ -190,12 +190,12 @@ scenarios/
   README.md                     - Scenario format docs
 
 run_ab_test.py                 - CLI for running tests
-test_strategy_direct.py        - Direct strategy testing (no API)
+1_local_regex_test.py        - Direct strategy testing (no API)
 ```
 
 ## Validation
 
-- ✅ Noise stripping tested and validated (94.7% reduction)
+- ✅ Noise stripping tested and validated on initial scenarios
 - ✅ Strategies module works correctly
 - ✅ Simulator provides realistic tool outputs
 - ✅ Scenario loader validates input
@@ -213,7 +213,7 @@ To add a new strategy:
 1. Implement function in `strategies.py`
 2. Add to `STRATEGIES` registry
 3. Create test scenario in `scenarios/`
-4. Run: `python test_strategy_direct.py` (quick validation)
+4. Run: `python 1_local_regex_test.py` (quick validation)
 5. Run: `python run_ab_test.py scenarios/your_scenario.json` (full test)
 
 To add a new tool:

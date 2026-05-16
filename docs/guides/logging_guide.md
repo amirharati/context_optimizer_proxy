@@ -125,7 +125,7 @@ ENABLE_FULL_SESSION_LOGGING=true
    ```bash
    # Move to separate analysis directory
    mkdir -p analysis/raw_sessions
-   mv logs/sessions/*.jsonl analysis/raw_sessions/
+   mv logs/sessions/2026-05-14_May_14 analysis/raw_sessions/
    ```
 
 ### During normal use (minimal logging):

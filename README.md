@@ -146,10 +146,11 @@ This proxy implements a multi-phase compression strategy:
 ✓ Web UI for viewing session logs
 ✓ Basic token estimation and metrics
 ✓ Model aliases for Cursor compatibility
+✓ A/B Testing Framework (Simulated runtime + real LLM calls)
+✓ Phase 1: Noise Stripping
 
 **In Progress:**
-- Phase 1 implementation (noise stripping, path compression)
-- A/B testing framework
+- Phase 1: Path compression
 
 **Planned:**
 - Phase 2: TTL tracking and context limits
@@ -362,7 +363,7 @@ Documentation: Start at `docs/README.md`, then `docs/implementation/IMPLEMENTATI
 
 Session Viewer: http://localhost:8000/ui
 
-Logs Directory: `logs/sessions/` (gitignored — see `.gitignore`)
+Logs Directory: `logs/sessions/<date_human_readable>/` (gitignored — see `.gitignore`)
 
 Key docs:
 - `docs/research/compression_research.md` — What to compress and why
@@ -371,6 +372,6 @@ Key docs:
 
 
 ================================================================================
-Last updated: May 15, 2026
-Version: 0.1.0 (Phase 1 in progress)
+Last updated: May 16, 2026
+Version: 0.1.1 (Phase 1 in progress)
 ================================================================================

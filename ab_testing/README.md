@@ -18,10 +18,10 @@ ab_testing/
 │  ├─ runner.py
 │  └─ README.md
 ├─ tests/            ← Test scripts
-│  ├─ test_strategy_direct.py
-│  ├─ test_full_endtoend.py
-│  ├─ test_walkthrough.py
-│  ├─ test_interactive.py
+│  ├─ 1_local_regex_test.py
+│  ├─ 2_local_simulation_test.py
+│  ├─ 3_proxy_api_test.py
+│  ├─ run_interactive.py
 │  └─ run_ab_test.py
 ├─ scenarios/        ← Test scenarios (JSON)
 │  ├─ simple_shell_noise.json
@@ -40,18 +40,18 @@ ab_testing/
 cd ab_testing/tests
 
 # Free tests (instant)
-python test_strategy_direct.py
-python test_full_endtoend.py
+python 1_local_regex_test.py
+python 2_local_simulation_test.py
 
 # Real API (costs $$)
-python test_walkthrough.py
-python test_interactive.py
+python 3_proxy_api_test.py
+python run_interactive.py
 ```
 
 ## Results
 
 **Baseline:** 265 tokens  
-**Compressed:** 130 tokens  
-**Savings:** 135 tokens (46.6%)
+**Compressed:** Reduced tokens  
+**Savings:** Measurable reduction (exact numbers in future reports)
 
 See `docs/IMPLEMENTATION_REPORT.md` for full details.

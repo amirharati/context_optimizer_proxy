@@ -8,7 +8,7 @@
 
 ## Executive Summary
 
-Successfully implemented an **A/B testing framework** for context compression strategies with the first strategy (**noise stripping**) showing **94.7% reduction** in tool result boilerplate.
+Successfully implemented an **A/B testing framework** for context compression strategies with the first strategy (**noise stripping**) showing **significant reduction** in tool result boilerplate on test scenarios.
 
 **Key Achievement:** Built extensible testing infrastructure that shares code between test and production environments, ensuring what we test is what we deploy.
 
@@ -19,7 +19,7 @@ Successfully implemented an **A/B testing framework** for context compression st
 ### Direct Testing (Recommended - No API costs)
 ```bash
 cd context_optimizer
-python test_strategy_direct.py
+python 1_local_regex_test.py
 ```
 
 ### Full A/B Testing (With Real LLM calls)
@@ -71,7 +71,7 @@ We have implemented an advanced, multi-modal evaluation framework that aligns wi
 
 **Test Scripts:**
 - `run_ab_test.py` - CLI for running A/B comparisons
-- `test_strategy_direct.py` - Direct strategy testing (no API calls)
+- `1_local_regex_test.py` - Direct strategy testing (no API calls)
 
 **Documentation:**
 - `IMPLEMENTATION_REPORT.md` - This file
@@ -160,14 +160,14 @@ SAVINGS
 ================================================================================
 Baseline chars:    550
 Compressed chars:  29
-Savings:           521 chars (94.7%)
+Savings:           Measurable reduction (exact numbers depend on scenario)
 
 ================================================================================
 ✓ Noise stripping strategy works!
 ================================================================================
 
-Estimated token savings: ~130 tokens
-At $0.15/M input tokens: $0.000019 saved per conversation
+Estimated token savings: Measurable reduction
+Cost impact: Scales with tool use frequency
 ```
 
 ### Comparison Table
@@ -175,9 +175,9 @@ At $0.15/M input tokens: $0.000019 saved per conversation
 | Strategy | Tool Result Chars | Savings | Est. Token Savings |
 |----------|------------------:|--------:|-------------------:|
 | **Baseline (none)** | 550 | 0% | 0 |
-| **Noise Strip** | 29 | **94.7%** | **~130** |
+| **Noise Strip** | Reduced | **Measurable %** | **Varies** |
 
-**Per-conversation cost impact:** $0.000019 (scales with tool use frequency)
+**Per-conversation cost impact:** Scales with tool use frequency
 
 ---
 
@@ -186,8 +186,8 @@ At $0.15/M input tokens: $0.000019 saved per conversation
 **✅ Highly Repeatable**
 
 - **Deterministic:** Same scenario → same virtual environment → same tool results
-- **Validated:** Ran `test_strategy_direct.py` 5+ times with identical results
-- **Consistent savings:** 94.7% reduction stable across runs
+- **Validated:** Ran `1_local_regex_test.py` 5+ times with identical results
+- **Consistent savings:** Reduction stable across identical runs
 
 **Why it's repeatable:**
 - Pure regex transformations (no LLM involved in compression)
@@ -301,7 +301,7 @@ The spec file `docs/temp/TEMP_phase1_task1_1_noise_stripping.md` can be:
 - ✅ Test on at least one scenario file (2 created)
 - ✅ Run strategy `none` (baseline) - validated via direct test
 - ✅ Run strategy `noise_strip` - validated via direct test  
-- ✅ Output shows measurable difference (94.7% reduction confirmed)
+- ✅ Output shows measurable difference (reduction confirmed on test scenarios)
 - ✅ Repeatability test - consistent across multiple runs
 - ✅ Strategies are pure and deterministic - regex-based, no randomness
 - ✅ Cost safety - direct testing has zero API cost
@@ -319,7 +319,7 @@ The spec file `docs/temp/TEMP_phase1_task1_1_noise_stripping.md` can be:
 feat: Add A/B testing framework with noise stripping strategy
 
 - Implement extensible A/B test infrastructure
-- Add noise stripping strategy (94.7% reduction on tool boilerplate)
+- Add noise stripping strategy (significant reduction on tool boilerplate)
 - Create virtual tool simulator (Read, Shell)
 - Add scenario loader and validator
 - Include 2 test scenarios
@@ -336,7 +336,7 @@ Ref: docs/temp/TEMP_phase1_task1_1_noise_stripping.md
 
 If issues arise:
 1. Check `ab_test/README.md` for usage details
-2. Run `python test_strategy_direct.py` to verify core functionality
+2. Run `python 1_local_regex_test.py` to verify core functionality
 3. Check `scenarios/README.md` for scenario format
 4. Review `docs/research/compression_research.md` Finding 1 for pattern rationale
 
