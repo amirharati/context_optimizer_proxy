@@ -108,14 +108,19 @@ python run_cli.py ../scenarios/simple_shell_noise.json
 
 ---
 
-### Option 5: Interactive Runner
+### Option 5: Interactive A/B Runner (recommended)
 
-Choose scenario and model interactively:
+Choose scenarios, strategies, model, runs, and cache mode interactively:
 
 ```bash
-cd context_optimizer/ab_testing/tests
-python run_interactive.py
+cd context_optimizer
+python ab_testing/tests/run_cli.py -i
 ```
+
+Notes:
+- If you run `python ab_testing/tests/run_cli.py` with no args, it auto-enters interactive mode.
+- Interactive mode prints a fully resolved command preview and asks for confirmation before running.
+- Baseline strategy `none` is always included automatically.
 
 ---
 
@@ -126,11 +131,19 @@ You can change the model in several ways:
 ### Method 1: Using CLI Arguments (for run_cli.py)
 
 ```bash
-python run_cli.py ../scenarios/simple_shell_noise.json \
+python ab_testing/tests/run_cli.py ab_testing/scenarios/simple_shell_noise.json \
   --model "openai/gpt-4o" \
   --max-turns 5 \
   --strategies none noise_strip
 ```
+
+### Method 2: Using model config file (recommended)
+
+Interactive model options are loaded from:
+
+`ab_testing/config/models.json`
+
+Edit this file to add/remove/update model IDs without changing code.
 
 ### Method 2: Modify the Script
 
@@ -154,7 +167,7 @@ baseline_request = {
 
 ```bash
 # Set via .env (persistent)
-echo "TEST_MODEL=anthropic/claude-3-5-sonnet-20241022" >> .env
+echo "TEST_MODEL=anthropic/claude-sonnet-4-5" >> .env
 
 # Then in Python:
 import os
@@ -165,16 +178,13 @@ model = os.getenv("TEST_MODEL", "openai/gpt-4o-mini")
 
 ## Available Models
 
-### Cheap (Good for Testing)
-- `openai/gpt-4o-mini` - $0.15/M input tokens ← **Default**
-- `google/gemini-flash-1.5` - Very cheap
+Do not hardcode from docs: use `ab_testing/config/models.json` as the source of truth.
 
-### Medium
-- `openai/gpt-4o` - $5/M input tokens
-- `anthropic/claude-3-5-sonnet-20241022` - $3/M input tokens
+List current configured models:
 
-### Expensive (Better Quality)
-- `anthropic/claude-3-opus-20240229` - $15/M input tokens
+```bash
+python ab_testing/tests/run_cli.py --list-models
+```
 
 **Cost Calculator:**
 ```
@@ -314,8 +324,8 @@ To compare multiple strategies (once we add more):
 The CLI runner is the primary tool for batch testing and generating reports.
 
 ```bash
-cd context_optimizer/ab_testing/tests
-python run_cli.py ../scenarios/simple_shell_noise.json \
+cd context_optimizer
+python ab_testing/tests/run_cli.py ab_testing/scenarios/simple_shell_noise.json \
   --strategies none noise_strip \
   --model openai/gpt-4o-mini \
   --max-turns 5 \
@@ -324,24 +334,28 @@ python run_cli.py ../scenarios/simple_shell_noise.json \
 ```
 
 **Key Arguments:**
-- `scenario`: Path to the scenario JSON file (positional argument)
+- `scenario`: Path to one scenario JSON file (positional argument)
+- `--scenarios`: Run an explicit list of scenarios
 - `--all`: Run all scenarios found in the `scenarios/` directory
 - `--model`: Model to use (default: `openai/gpt-4o-mini`)
 - `--strategies`: Space-separated list of strategies to compare (default: `none noise_strip`)
+- `--list-strategies`: Print available strategies and exit
+- `--list-models`: Print model options from `ab_testing/config/models.json` and exit
 - `--max-turns`: Maximum conversation turns per run (default: `10`)
 - `--runs`: Number of times to run each scenario for averaging results (default: `1`)
 - `--temperature`: LLM temperature (default: `0.0` for determinism)
-- `--output`: Save results to a specific JSON file (defaults to `runs/run_YYYYMMDD_HHMMSS/report.json`)
+- `--output`: Save results to a specific JSON file (default is run-folder `report.json`)
+- `--disable-cache`: Force cache-busting behavior for measurement isolation
 - `--no-full-logging`: Disable full logging of requests (full logging is enabled by default)
 
 **Example: Run all scenarios multiple times to get average savings**
 ```bash
-python run_cli.py --all --runs 3 --model anthropic/claude-3-5-sonnet-20241022
+python ab_testing/tests/run_cli.py --all --runs 3 --model anthropic/claude-sonnet-4-5
 ```
 
 Then check the generated report:
 ```bash
-cat runs/run_*/report.json | python -m json.tool
+cat runs/*/*/run_*/report.json | python -m json.tool
 ```
 
 ---
@@ -397,8 +411,8 @@ tail -50 /tmp/proxy_server.log
 
 ## Questions?
 
-- **How do I measure tokens for [tool name]?** Add it to `ab_test/tool_schemas.py`
-- **Can I add a new strategy?** Add function to `ab_test/strategies.py` and register in `STRATEGIES`
-- **How do I use a different provider?** Change model name (e.g., `anthropic/claude-3-5-sonnet-20241022`)
+- **How do I measure tokens for [tool name]?** Add it to `ab_testing/framework/tool_schemas.py`
+- **Can I add a new strategy?** Add function to `ab_testing/framework/strategies.py` and register in `STRATEGIES`
+- **How do I use a different provider?** Change model name (for current options see `python ab_testing/tests/run_cli.py --list-models`)
 - **Can I run multiple tests in parallel?** Not yet (would need async support), but can run sequentially
 

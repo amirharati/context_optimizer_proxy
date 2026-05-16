@@ -1,0 +1,42 @@
+{
+  "name": "Deep Debugging - Flask API",
+  "description": "Debug a nested Flask API with bugs across authentication, database, and validation layers",
+  "system_prompt": "You are an expert Python debugger. Use Read, StrReplace, Grep, and Shell to find and fix bugs. Test each fix.",
+  "available_tools": ["Read", "StrReplace", "Grep", "Shell"],
+  "initial_cwd": "/workspace",
+  "virtual_fs": {
+    "/workspace/services/user_api/app.py": "from flask import Flask, request, jsonify\nfrom src.auth.middleware import require_auth\nfrom src.store.user_db import UserDB\n\napp = Flask(__name__)\ndb = UserDB()\n\n@app.route('/health')\ndef health():\n    return {'status': 'ok'}\n\n@app.route('/users', methods=['POST'])\n@require_auth\ndef create_user():\n    data = request.get_json()\n    username = data['username']\n    email = data['email']\n\n    # Bug: Missing validation\n    user_id = db.create_user(username, email)\n    return jsonify({'id': user_id}), 201\n\n@app.route('/users/<user_id>')\n@require_auth\ndef get_user(user_id):\n    user = db.get_user(user_id)\n    if user:\n        return jsonify(user)\n    return jsonify({'error': 'Not found'}), 404\n\nif __name__ == '__main__':\n    app.run(debug=True)\n",
+    "/workspace/services/user_api/src/auth/middleware.py": "from functools import wraps\nfrom flask import request, jsonify\n\nVALID_TOKENS = {'test-token-123'}\n\ndef require_auth(f):\n    @wraps(f)\n    def decorated(*args, **kwargs):\n        token = request.headers.get('Authorization')\n        # Bug: Wrong comparison\n        if token not in VALID_TOKENS:\n            return jsonify({'error': 'Unauthorized'}), 401\n        return f(*args, **kwargs)\n    return decorated\n",
+    "/workspace/services/user_api/src/store/user_db.py": "class UserDB:\n    def __init__(self):\n        self.users = {}\n        self.next_id = 1\n\n    def create_user(self, username, email):\n        # Bug: No duplicate check\n        user_id = str(self.next_id)\n        self.users[user_id] = {\n            'id': user_id,\n            'username': username,\n            'email': email\n        }\n        self.next_id += 1\n        return user_id\n\n    def get_user(self, user_id):\n        # Bug: Type mismatch (user_id might be int)\n        return self.users.get(user_id)\n",
+    "/workspace/services/user_api/scripts/test_api.sh": "#!/bin/bash\n# Test script that will fail due to bugs\n\n# Test 1: Health check\ncurl -s http://localhost:5000/health\n\n# Test 2: Create user without auth (should fail with 401)\ncurl -s -X POST http://localhost:5000/users \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"username\": \"john\", \"email\": \"john@test.com\"}'\n\n# Test 3: Create user with auth (will fail due to auth bug)\ncurl -s -X POST http://localhost:5000/users \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: test-token-123' \\\n  -d '{\"username\": \"john\", \"email\": \"john@test.com\"}'\n\n# Test 4: Get user (will fail due to type bug)\ncurl -s http://localhost:5000/users/1 \\\n  -H 'Authorization: test-token-123'\n",
+    "/workspace/services/user_api/requirements.txt": "flask==2.3.0\n"
+  },
+  "shell_responses": {},
+  "turns": [
+    {
+      "role": "user",
+      "content": "This nested Flask API under /workspace/services/user_api has multiple bugs causing failures.\n1. Inspect the project structure first\n2. Read app.py, auth middleware, and user_db files\n3. Analyze scripts/test_api.sh to infer expected behavior\n4. Fix all major issues in auth, db operations, and input validation\n\nDo not assume flat files; navigate using tools."
+    }
+  ],
+  "success_criteria": [
+    {
+      "type": "file_contains",
+      "path": "/workspace/services/user_api/src/auth/middleware.py",
+      "expected_text": "Bearer"
+    },
+    {
+      "type": "file_contains",
+      "path": "/workspace/services/user_api/src/store/user_db.py",
+      "expected_text": "str(user_id)"
+    },
+    {
+      "type": "file_contains",
+      "path": "/workspace/services/user_api/app.py",
+      "expected_text": "if not username"
+    },
+    {
+      "type": "max_turns",
+      "value": 10
+    }
+  ]
+}

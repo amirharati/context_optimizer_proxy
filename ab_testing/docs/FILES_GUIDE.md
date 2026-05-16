@@ -5,7 +5,7 @@
 ### 📚 Documentation (START HERE)
 - **QUICKSTART.md** - Step-by-step guide to run tests
 - **README_TESTING.md** - Complete reference
-- **ab_test/README.md** - Framework architecture
+- **framework/README.md** - Framework architecture
 - **scenarios/README.md** - How to write scenarios
 
 ### 🧪 Test Scripts (RUN THESE)
@@ -14,7 +14,7 @@
 - **3_proxy_api_test.py** - Real API test (costs $, 2 sec)
 - **4_tight_replay_test.py** - Turn-by-turn log replay (free, instant)
 - **run_cli.py** - Batch test runner across multiple scenarios
-- **run_interactive.py** - Choose scenario + model (interactive)
+- **run_cli.py -i** - Interactive runner (scenario(s), strategy, model, runs, cache)
 
 ### 📋 Scenarios (MODIFY THESE)
 - **scenarios/simple_shell_noise.json** - Minimal (2 commands)
@@ -23,17 +23,18 @@
 - **scenarios/fix_bug_execution.json** - Tests real code execution and success criteria
 
 ### 📁 Artifacts (GENERATED HERE)
-- **runs/run_YYYYMMDD_HHMMSS/** - Unified directory for each test run
+- **runs/YYYY-MM-DD/cache_mode/run_YYYYMMDD_HHMMSS_cache_mode/** - Unified directory for each test run
   - `report.json` - Token savings and success evaluation
+  - `cli_output.txt` - Full CLI output for the entire run
   - `sessions/` - The `.jsonl` traces from the proxy
   - `virtual_fs/` - The AI's final generated code
 
 ### 🔧 Core Framework (DON'T TOUCH YET)
-- **ab_test/strategies.py** - Compression logic (shared with main.py)
-- **ab_test/simulator.py** - Virtual tool execution (Read, Shell with **Real Docker Sandbox**, Write, StrReplace, Grep). Note: Every run gets a completely fresh environment and container.
-- **ab_test/scenario.py** - Scenario loading and deepcopy state isolation.
-- **ab_test/tool_schemas.py** - Tool definitions (5 implemented, 2 future)
-- **ab_test/runner.py** - Full test orchestration with pristine sub-runs (run_001, run_002, etc.)
+- **framework/strategies.py** - Compression logic (shared with main.py)
+- **framework/simulator.py** - Virtual tool execution (Read, Shell with **Real Docker Sandbox**, Write, StrReplace, Grep). Note: Every run gets a completely fresh environment and container.
+- **framework/scenario.py** - Scenario loading and deepcopy state isolation.
+- **framework/tool_schemas.py** - Tool definitions (5 implemented, 2 future)
+- **framework/runner.py** - Full test orchestration with pristine sub-runs (run_001, run_002, etc.)
 
 ### 🛠️ Implemented Tools
 | Tool | Usage | Output Format |
@@ -59,14 +60,14 @@ See **TOOL_COMPARISON.md** for full comparison with Cursor's 19 tools.
 1. Read QUICKSTART.md (5 min)
 2. Run: python 1_local_regex_test.py (instant)
 3. Run: python 2_local_simulation_test.py (instant)
-4. Run: python run_interactive.py (interactive)
+4. Run: python run_cli.py -i (interactive)
 ```
 
 ### Creating Custom Tests
 ```bash
 1. Copy scenarios/simple_shell_noise.json → scenarios/my_test.json
 2. Edit your scenario JSON
-3. Run: python run_interactive.py and select your scenario
+3. Run: python run_cli.py -i and select your scenario
 ```
 
 ### Production Integration
@@ -103,8 +104,8 @@ See **TOOL_COMPARISON.md** for full comparison with Cursor's 19 tools.
 **Good for:** Measuring actual token savings
 **Output:** Real tokens from API showing measurable reduction
 
-### 🟢 run_interactive.py
-**What it does:** Interactive model and scenario selection
+### 🟢 run_cli.py -i
+**What it does:** Interactive scenario/strategy/model/runs/cache selection
 **Time:** 2-5 seconds (depends on model)
 **Cost:** Depends on model chosen
 **Good for:** Comparing different models/scenarios
@@ -130,7 +131,7 @@ Total token savings:        Measurable reduction
 Cost saved:                 Varies by scenario length and tool usage
 ```
 
-### run_interactive.py Output
+### run_cli.py -i Output
 ```
 SELECT SCENARIO
 1. simple_shell_noise.json - Minimal (2 shell commands)
@@ -138,10 +139,7 @@ SELECT SCENARIO
 3. multi_turn_debug.json - Complex (debugging scenario)
 
 SELECT MODEL
-1. openai/gpt-4o-mini    $0.15/M  (CHEAP - Best for testing)
-2. openai/gpt-4o         $5/M     (MEDIUM - Good quality)
-3. anthropic/claude-3-5-sonnet  $3/M (MEDIUM - Anthropic)
-4. google/gemini-flash   CHEAP    (BUDGET - Fastest)
+1. [loaded dynamically from ab_testing/config/models.json]
 
 [Test runs and shows token savings...]
 ```
@@ -155,9 +153,9 @@ SELECT MODEL
 | Quick validation | 1_local_regex_test.py | <1s | $0 |
 | Understand flow | 2_local_simulation_test.py | <1s | $0 |
 | Measure tokens | 3_proxy_api_test.py | 2-5s | $0.0001 |
-| Try different models | run_interactive.py | 2-5s | varies |
+| Try different models | run_cli.py -i | 2-5s | varies |
 | Create test case | scenarios/simple_shell_noise.json | N/A | N/A |
-| Add new strategy | ab_test/strategies.py | N/A | N/A |
+| Add new strategy | framework/strategies.py | N/A | N/A |
 
 ---
 
@@ -175,7 +173,7 @@ python 3_proxy_api_test.py
 
 ### "I want to test a different model"
 ```bash
-python run_interactive.py
+python run_cli.py -i
 # Select model at prompt
 ```
 
@@ -183,13 +181,13 @@ python run_interactive.py
 ```bash
 cp scenarios/simple_shell_noise.json scenarios/my_test.json
 # Edit my_test.json
-python run_interactive.py
+python run_cli.py -i
 # Select your new scenario
 ```
 
 ### "I want to add a new strategy"
 ```bash
-# Edit ab_test/strategies.py
+# Edit framework/strategies.py
 # Add new function
 # Register in STRATEGIES dict
 # Test with: python 1_local_regex_test.py
@@ -201,31 +199,31 @@ python run_interactive.py
 
 ```
 1_local_regex_test.py
-  ├─ ab_test/strategies.py
-  ├─ ab_test/simulator.py
-  └─ ab_test/scenario.py
+  ├─ framework/strategies.py
+  ├─ framework/simulator.py
+  └─ framework/scenario.py
 
 2_local_simulation_test.py
-  ├─ ab_test/strategies.py
-  ├─ ab_test/simulator.py
-  └─ ab_test/scenario.py
+  ├─ framework/strategies.py
+  ├─ framework/simulator.py
+  └─ framework/scenario.py
 
 3_proxy_api_test.py
-  ├─ ab_test/strategies.py
-  ├─ ab_test/simulator.py
-  ├─ ab_test/scenario.py
+  ├─ framework/strategies.py
+  ├─ framework/simulator.py
+  ├─ framework/scenario.py
   ├─ main.py (running on localhost:8000)
   └─ httpx (HTTP client)
 
-run_interactive.py
-  ├─ ab_test/scenario.py
-  ├─ ab_test/simulator.py
-  ├─ ab_test/strategies.py
+run_cli.py
+  ├─ framework/scenario.py
+  ├─ framework/simulator.py
+  ├─ framework/strategies.py
   ├─ main.py (running on localhost:8000)
   └─ httpx (HTTP client)
 
 main.py
-  ├─ ab_test/strategies.py ← USES THIS
+  ├─ framework/strategies.py ← USES THIS
   ├─ compressor.py
   ├─ logger.py
   └─ ui.py
@@ -239,10 +237,10 @@ main.py
 - [ ] Run 2_local_simulation_test.py ✓
 - [ ] Run 3_proxy_api_test.py ✓
 - [ ] Measure token savings in 3_proxy_api_test.py
-- [ ] Review noise_strip strategy in ab_test/strategies.py
+- [ ] Review noise_strip strategy in framework/strategies.py
 - [ ] Uncomment strategy integration in main.py
 - [ ] Set ENABLE_NOISE_STRIPPING=true in .env
 - [ ] Restart main.py
-- [ ] Test with live proxy: python run_interactive.py
+- [ ] Test with live proxy: python run_cli.py -i
 - [ ] Monitor actual API token usage
 

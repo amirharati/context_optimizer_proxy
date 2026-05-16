@@ -33,6 +33,8 @@ class Scenario:
         self.initial_cwd = data.get("initial_cwd", "/workspace")
         self.turns = copy.deepcopy(data.get("turns", []))
         self.success_criteria = copy.deepcopy(data.get("success_criteria", []))
+        self.cache_mode = data.get("cache_mode")
+        self.disable_cache = data.get("disable_cache")
         
         # Validate
         self._validate()
@@ -55,10 +57,16 @@ class Scenario:
             raise ValueError("First turn must be from user")
         
         # Validate available_tools
-        valid_tools = {"Read", "Shell", "Write"}
+        valid_tools = {"Read", "Shell", "Write", "StrReplace", "Grep"}
         for tool in self.available_tools:
             if tool not in valid_tools:
                 raise ValueError(f"Unknown tool in available_tools: {tool}")
+
+        if self.cache_mode is not None and self.cache_mode not in {"on", "off"}:
+            raise ValueError("cache_mode must be 'on' or 'off' when provided")
+
+        if self.disable_cache is not None and not isinstance(self.disable_cache, bool):
+            raise ValueError("disable_cache must be a boolean when provided")
     
     def get_initial_messages(self) -> List[Dict[str, Any]]:
         """
@@ -94,7 +102,27 @@ class Scenario:
             "initial_cwd": self.initial_cwd,
             "turns": copy.deepcopy(self.turns),
             "success_criteria": copy.deepcopy(self.success_criteria),
+            "cache_mode": self.cache_mode,
+            "disable_cache": self.disable_cache,
         }
+
+    def resolve_disable_cache(self, cli_disable_cache: bool = False) -> bool:
+        """
+        Resolve effective cache behavior for this scenario.
+
+        Priority:
+        1) CLI --disable-cache (global override)
+        2) Scenario disable_cache boolean
+        3) Scenario cache_mode ('off' => disable cache)
+        4) Default cache-on
+        """
+        if cli_disable_cache:
+            return True
+        if isinstance(self.disable_cache, bool):
+            return self.disable_cache
+        if self.cache_mode == "off":
+            return True
+        return False
 
 
 def load_scenario(filepath: str) -> Scenario:

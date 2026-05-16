@@ -39,6 +39,47 @@ class RuntimeSimulator:
         # Start a long-running Docker container if we'll be executing commands
         if self.run_dir:
             self._start_docker_container()
+
+    @staticmethod
+    def _to_disk_rel_path(vfs_path: str) -> str:
+        """
+        Convert virtual fs path to path relative to mounted /workspace.
+        """
+        if not vfs_path:
+            return ""
+        if vfs_path == "/workspace":
+            return ""
+        if vfs_path.startswith("/workspace/"):
+            return vfs_path[len("/workspace/"):]
+        if vfs_path.startswith("workspace/"):
+            return vfs_path[len("workspace/"):]
+        return vfs_path.lstrip("/")
+
+    def _lookup_vfs_content(self, path: str) -> Optional[str]:
+        """
+        Resolve file content for both absolute and relative path styles.
+        """
+        candidates = [path]
+        rel = self._to_disk_rel_path(path)
+        if rel:
+            candidates.extend([rel, f"/{rel}", f"/workspace/{rel}", f"workspace/{rel}"])
+        for candidate in candidates:
+            if candidate in self.virtual_fs:
+                return self.virtual_fs[candidate]
+        return None
+
+    def _resolve_vfs_key(self, path: str) -> Optional[str]:
+        """
+        Resolve the canonical key currently present in virtual_fs for a path.
+        """
+        candidates = [path]
+        rel = self._to_disk_rel_path(path)
+        if rel:
+            candidates.extend([rel, f"/{rel}", f"/workspace/{rel}", f"workspace/{rel}"])
+        for candidate in candidates:
+            if candidate in self.virtual_fs:
+                return candidate
+        return None
     
     def _start_docker_container(self):
         """Start a long-running Docker container for command execution."""
@@ -51,7 +92,7 @@ class RuntimeSimulator:
         # Write initial virtual_fs to temp dir
         import os
         for fpath, content in self.virtual_fs.items():
-            rel = fpath.lstrip("/")
+            rel = self._to_disk_rel_path(fpath)
             full = os.path.join(self.temp_exec_dir, rel)
             os.makedirs(os.path.dirname(full), exist_ok=True)
             with open(full, 'w') as f:
@@ -126,8 +167,8 @@ class RuntimeSimulator:
         Returns:
             File contents with line numbers (Cursor format)
         """
-        if path in self.virtual_fs:
-            content = self.virtual_fs[path]
+        content = self._lookup_vfs_content(path)
+        if content is not None:
             # Format with line numbers like Cursor: "     1|code"
             lines = content.split('\n')
             numbered_lines = []
@@ -150,7 +191,11 @@ class RuntimeSimulator:
         Returns:
             Success message
         """
-        self.virtual_fs[path] = contents
+        existing_key = self._resolve_vfs_key(path)
+        if existing_key:
+            self.virtual_fs[existing_key] = contents
+        else:
+            self.virtual_fs[path] = contents
         return f"Wrote contents to {path}"
     
     def handle_shell(self, command: str) -> str:
@@ -175,7 +220,7 @@ class RuntimeSimulator:
             
             # Sync current virtual_fs to temp dir before executing
             for fpath, content in self.virtual_fs.items():
-                rel = fpath.lstrip("/")
+                rel = self._to_disk_rel_path(fpath)
                 full = os.path.join(self.temp_exec_dir, rel)
                 os.makedirs(os.path.dirname(full), exist_ok=True)
                 with open(full, 'w') as f:
@@ -214,6 +259,9 @@ class RuntimeSimulator:
                                 elif "/" + rel_path in self.virtual_fs:
                                     self.virtual_fs["/" + rel_path] = content
                                     seen_paths.add("/" + rel_path)
+                                elif "/workspace/" + rel_path in self.virtual_fs:
+                                    self.virtual_fs["/workspace/" + rel_path] = content
+                                    seen_paths.add("/workspace/" + rel_path)
                                 else:
                                     # New file created by the shell command
                                     self.virtual_fs[rel_path] = content
@@ -228,7 +276,7 @@ class RuntimeSimulator:
                         if vfs_path in seen_paths:
                             continue
                         # Check both rel and absolute forms on disk
-                        rel = vfs_path.lstrip("/")
+                        rel = self._to_disk_rel_path(vfs_path)
                         on_disk = os.path.join(self.temp_exec_dir, rel)
                         if not os.path.exists(on_disk):
                             del self.virtual_fs[vfs_path]
@@ -236,7 +284,7 @@ class RuntimeSimulator:
                     # Copy all files to run_dir for archival
                     if self.run_dir:
                         for fpath, content in self.virtual_fs.items():
-                            rel = fpath.lstrip("/")
+                            rel = self._to_disk_rel_path(fpath)
                             full = os.path.join(self.run_dir, rel)
                             os.makedirs(os.path.dirname(full), exist_ok=True)
                             with open(full, 'w') as f:
@@ -320,10 +368,11 @@ class RuntimeSimulator:
         Returns:
             Success or error message
         """
-        if path not in self.virtual_fs:
+        resolved_key = self._resolve_vfs_key(path)
+        if not resolved_key:
             return f"Error: File not found: {path}"
         
-        content = self.virtual_fs[path]
+        content = self.virtual_fs[resolved_key]
         
         if old_string not in content:
             return f"Error: old_string not found in {path}. The edit will FAIL if old_string is not unique in the file."
@@ -338,7 +387,7 @@ class RuntimeSimulator:
         else:
             new_content = content.replace(old_string, new_string, 1)
         
-        self.virtual_fs[path] = new_content
+        self.virtual_fs[resolved_key] = new_content
         return f"The file {path} has been updated."
     
     def handle_grep(self, pattern: str, path: str = None) -> str:
@@ -370,8 +419,11 @@ class RuntimeSimulator:
         
         for fpath, content in self.virtual_fs.items():
             # Apply path filter if provided
-            if path and not fpath.startswith(path):
-                continue
+            if path:
+                normalized_filter = self._to_disk_rel_path(path)
+                normalized_file = self._to_disk_rel_path(fpath)
+                if not (fpath.startswith(path) or normalized_file.startswith(normalized_filter)):
+                    continue
             
             lines = content.split('\n')
             file_matches = []

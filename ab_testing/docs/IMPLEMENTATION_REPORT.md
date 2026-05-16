@@ -6,6 +6,44 @@
 
 ---
 
+## Update Log (May 16, 2026)
+
+This report originally covered Task 1.1. The framework has since been extended significantly:
+
+- Added cache-aware instrumentation and reporting:
+  - `raw_input_tokens`, `cache_read_tokens`, `cache_creation_tokens`, `billed_input_tokens`
+  - metric provenance (`api_reported`, `estimated`, `unavailable`)
+- Added scenario-level cache controls and CLI override behavior:
+  - scenario fields: `cache_mode`, `disable_cache`
+  - CLI `--disable-cache` takes precedence
+- Added new strategies:
+  - `path_compression`
+  - `noise_and_paths`
+- Added realistic complex scenarios:
+  - `complex_refactor.json`
+  - `deep_debugging.json`
+- Updated run layout and artifacts:
+  - `runs/<YYYY-MM-DD>/<cache_mode>/<run_name>/...`
+  - per-run `cli_output.txt` capture
+- Added interactive A/B flow to `run_cli.py` (`-i`) with:
+  - scenario/strategy/model/runs/cache prompts
+  - command preview + confirm step
+  - `--list-strategies` and `--list-models`
+  - model options now loaded from `ab_testing/config/models.json`
+- UI/browser upgrades:
+  - hierarchical drill-down navigation for logs/runs
+  - artifact viewing for `report.json`, markdown/text files, and nested `virtual_fs`
+- Proxy/runner hardening for A/B isolation:
+  - runner now sends `x-proxy-force-pass-through: true`
+  - proxy respects this by skipping proxy-side strategy/compression regardless of env
+
+For current operational guidance, use:
+- `ab_testing/docs/QUICKSTART.md`
+- `ab_testing/GETTING_STARTED.md`
+- `ab_testing/docs/FILES_GUIDE.md`
+
+---
+
 ## Executive Summary
 
 Successfully implemented an **A/B testing framework** for context compression strategies with the first strategy (**noise stripping**) showing **significant reduction** in tool result boilerplate on test scenarios.

@@ -1,0 +1,40 @@
+{
+  "name": "Complex Refactor - Todo CLI App",
+  "description": "Build and refactor a nested todo CLI app with persistence, error handling, and tests",
+  "system_prompt": "You are an expert Python developer. Use Read, Write, StrReplace, Grep, and Shell tools to complete tasks. Always test your changes.",
+  "available_tools": ["Read", "Write", "StrReplace", "Grep", "Shell"],
+  "initial_cwd": "/workspace",
+  "virtual_fs": {
+    "/workspace/apps/todo_cli/src/todo_app.py": "#!/usr/bin/env python3\n# Todo CLI - Version 1\nimport sys\n\ntodos = []\n\ndef add_todo(task):\n    todos.append(task)\n    print(f'Added: {task}')\n\ndef list_todos():\n    if not todos:\n        print('No todos yet!')\n        return\n    for i, task in enumerate(todos, 1):\n        print(f'{i}. {task}')\n\ndef complete_todo(index):\n    todos.pop(index - 1)\n    print('Todo completed!')\n\nif __name__ == '__main__':\n    if len(sys.argv) < 2:\n        print('Usage: todo_app.py <add|list|done> [args]')\n        sys.exit(1)\n\n    cmd = sys.argv[1]\n    if cmd == 'add':\n        add_todo(' '.join(sys.argv[2:]))\n    elif cmd == 'list':\n        list_todos()\n    elif cmd == 'done':\n        complete_todo(int(sys.argv[2]))\n",
+    "/workspace/apps/todo_cli/tests/test_smoke.py": "import subprocess\n\nCOMMAND = ['python', '/workspace/apps/todo_cli/src/todo_app.py']\n\n\ndef run(*args):\n    result = subprocess.run(COMMAND + list(args), capture_output=True, text=True)\n    return result.returncode, result.stdout, result.stderr\n\n\nif __name__ == '__main__':\n    code, out, _ = run('add', 'demo-task')\n    assert code == 0\n    code, out, _ = run('list')\n    assert code == 0\n    assert 'demo-task' in out\n    print('smoke-ok')\n",
+    "/workspace/apps/todo_cli/requirements.txt": "# No dependencies yet\n"
+  },
+  "shell_responses": {},
+  "turns": [
+    {
+      "role": "user",
+      "content": "I have a nested project under /workspace/apps/todo_cli. I need you to:\n1. Inspect the structure and read the CLI source in src/\n2. Test the current version\n3. Refactor to add JSON persistence (todos.json)\n4. Add proper error handling for invalid operations\n5. Re-run tests after refactoring\n\nUse tools to navigate files instead of assuming flat paths."
+    }
+  ],
+  "success_criteria": [
+    {
+      "type": "file_contains",
+      "path": "/workspace/apps/todo_cli/src/todo_app.py",
+      "expected_text": "json"
+    },
+    {
+      "type": "file_contains",
+      "path": "/workspace/apps/todo_cli/src/todo_app.py",
+      "expected_text": "try:"
+    },
+    {
+      "type": "run_command",
+      "command": "python /workspace/apps/todo_cli/src/todo_app.py add 'Test task' && python /workspace/apps/todo_cli/src/todo_app.py list",
+      "timeout": 5
+    },
+    {
+      "type": "max_turns",
+      "value": 10
+    }
+  ]
+}

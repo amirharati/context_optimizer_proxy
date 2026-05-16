@@ -24,6 +24,8 @@ Each scenario is a JSON file with the following structure:
     }
   },
   "initial_cwd": "/workspace",
+  "cache_mode": "on",
+  "disable_cache": false,
   "turns": [
     {"role": "user", "content": "User message..."}
   ],
@@ -51,11 +53,20 @@ Each scenario is a JSON file with the following structure:
 - **virtual_fs**: Dictionary mapping file paths to contents
 - **shell_responses**: Dictionary mapping shell commands to their outputs
 - **initial_cwd**: Initial working directory (default: "/workspace")
+- **cache_mode**: Optional `"on"` or `"off"`; controls cache behavior for this scenario when CLI does not override it.
+- **disable_cache**: Optional boolean shortcut (`true` forces cache busting, `false` keeps cache behavior). Takes precedence over `cache_mode` inside the scenario.
 - **turns**: Initial conversation turns (must start with user message)
 - **success_criteria**: Array of checks to run at the end of the scenario to objectively evaluate if the AI succeeded.
   - `file_contains`: Checks if `expected_text` exists in `path`
   - `run_command`: Dumps the virtual filesystem to disk and runs a real shell command. Fails if exit code is not 0.
   - `max_turns`: Fails if the AI takes more than `value` turns (thrashing).
+
+## Cache control precedence
+
+1. `--disable-cache` CLI flag (global override)
+2. Scenario `disable_cache` field
+3. Scenario `cache_mode` field (`off` means cache busting)
+4. Default is cache-on
 
 ## Shell Response Format
 

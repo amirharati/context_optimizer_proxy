@@ -25,8 +25,10 @@ context_optimizer/
    │  ├─ 1_local_regex_test.py   (free, instant)
    │  ├─ 2_local_simulation_test.py     (free, instant)
    │  ├─ 3_proxy_api_test.py       (real API)
-   │  ├─ run_interactive.py       (interactive)
-   │  └─ run_ab_test.py
+   │  └─ run_cli.py                (batch + interactive A/B runner)
+   │
+   ├─ config/
+   │  └─ models.json               (interactive model menu source)
    │
    ├─ scenarios/                   (test scenarios)
    │  ├─ simple_shell_noise.json
@@ -54,8 +56,8 @@ cat docs/QUICKSTART.md
 cd tests
 python 1_local_regex_test.py
 
-# Run interactive test (choose model)
-python run_interactive.py
+# Run interactive A/B test (scenario(s) + strategies + model + runs + cache)
+python tests/run_cli.py -i
 ```
 
 ## 📊 Key Results
@@ -97,16 +99,18 @@ docker info
 # Full A/B comparison (Run scenarios dynamically)
 python ab_testing/tests/run_cli.py ab_testing/scenarios/simple_shell_noise.json
 
-# Interactive (choose scenario + model)
-python ab_testing/tests/run_interactive.py
+# Interactive (choose scenario(s) + strategy + model + runs + cache)
+python ab_testing/tests/run_cli.py -i
 ```
 
 ## 📝 Creating Custom Scenarios
 
 1. Copy a scenario: `cp ab_testing/scenarios/simple_shell_noise.json ab_testing/scenarios/my_test.json`
 2. Edit the JSON with your tools and responses
-3. Run: `python ab_testing/tests/run_interactive.py`
+3. Run: `python ab_testing/tests/run_cli.py -i`
 4. Select your scenario
+
+Tip: edit `ab_testing/config/models.json` to update interactive model choices.
 
 ## 🔧 Adding New Strategies
 

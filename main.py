@@ -27,6 +27,9 @@ MODEL_ALIASES = {
     # Use co- names in Cursor's custom endpoint to guarantee they go through this proxy.
     "co-claude-sonnet":     "anthropic/claude-sonnet-4-5",
     "co-claude-sonnet-4-5": "anthropic/claude-sonnet-4-5",
+    "co-claude-sonnet-4-6": "anthropic/claude-sonnet-4-6",
+    "co-claude-opus-4-7":   "anthropic/claude-opus-4-7",
+    "co-claude-haiku-4-5":  "anthropic/claude-haiku-4-5",
     "co-claude-3-5-sonnet": "anthropic/claude-3-5-sonnet-20241022",
     "co-claude-haiku":      "anthropic/claude-3-haiku-20240307",
     "co-claude-opus":       "anthropic/claude-3-opus-20240229",
@@ -36,10 +39,17 @@ MODEL_ALIASES = {
     "co-gpt5.5":            "openai/gpt-5.5",
     "co-gemini-pro":        "google/gemini-pro-1.5",
     "co-gemini-flash":      "google/gemini-flash-1.5",
+    "co-gemini-2-5-pro":    "google/gemini-2.5-pro",
+    "co-gemini-2-5-flash":  "google/gemini-2.5-flash",
+    "co-gemini-2-5-lite":   "google/gemini-2.5-flash-lite",
     "co-deepseek":          "deepseek/deepseek-r1",
     "co-deepseek-flash":    "deepseek/deepseek-v4-flash",
+    "co-deepseek-pro":      "deepseek/deepseek-v4-pro",
     # --- Slash names (passthrough) ---
     "anthropic/claude-sonnet-4-5":          "anthropic/claude-sonnet-4-5",
+    "anthropic/claude-sonnet-4-6":          "anthropic/claude-sonnet-4-6",
+    "anthropic/claude-opus-4-7":            "anthropic/claude-opus-4-7",
+    "anthropic/claude-haiku-4-5":           "anthropic/claude-haiku-4-5",
     "anthropic/claude-3-5-sonnet-20241022": "anthropic/claude-3-5-sonnet-20241022",
     "anthropic/claude-3-haiku":             "anthropic/claude-3-haiku-20240307",
     "anthropic/claude-3-haiku-20240307":    "anthropic/claude-3-haiku-20240307",
@@ -51,7 +61,11 @@ MODEL_ALIASES = {
     "openai/gpt-5.5":                       "openai/gpt-5.5",
     "google/gemini-pro-1.5":                "google/gemini-pro-1.5",
     "google/gemini-flash-1.5":              "google/gemini-flash-1.5",
+    "google/gemini-2.5-pro":                "google/gemini-2.5-pro",
+    "google/gemini-2.5-flash":              "google/gemini-2.5-flash",
+    "google/gemini-2.5-flash-lite":         "google/gemini-2.5-flash-lite",
     "deepseek/deepseek-r1":                 "deepseek/deepseek-r1",
+    "deepseek/deepseek-v4-pro":             "deepseek/deepseek-v4-pro",
     "deepseek/deepseek-v4-flash":           "deepseek/deepseek-v4-flash",
 }
 
@@ -160,9 +174,14 @@ async def chat_completions(request: Request):
 
     # Cursor sends its own tool definitions for agentic features (file editing, terminal, etc.).
     # Some of these may have empty names which OpenRouter/Anthropic reject outright.
-    # 2. Apply preprocessing strategies (noise stripping, etc.)
+    # A/B runner can force true proxy pass-through so only runner-side strategies are measured.
+    force_pass_through = request.headers.get("x-proxy-force-pass-through", "false").lower() == "true"
+
+    # 2. Apply preprocessing strategies (noise stripping, etc.) unless pass-through is forced.
     strategy = os.getenv("AB_TEST_STRATEGY", "none")
-    if strategy != "none":
+    if force_pass_through:
+        print("[PROXY] Pass-through forced by request header (skipping proxy strategy/compression)")
+    elif strategy != "none":
         try:
             messages = apply_strategy(strategy, messages)
             print(f"[PROXY] Applied preprocessing strategy: {strategy}")
@@ -173,10 +192,13 @@ async def chat_completions(request: Request):
     disable_default_logging = request.headers.get("x-proxy-disable-default-logging", "false").lower() == "true"
 
     # 3. Evaluate and Compress the Context
-    bypass = os.getenv("BYPASS_COMPRESSION", "false").lower() == "true"
+    bypass = force_pass_through or (os.getenv("BYPASS_COMPRESSION", "false").lower() == "true")
     if bypass:
         compressed_messages, was_compressed, orig_tokens, comp_tokens = messages, False, 0, 0
-        print(f"[PROXY] Compression BYPASSED (BYPASS_COMPRESSION=true)")
+        if force_pass_through:
+            print("[PROXY] Compression BYPASSED (x-proxy-force-pass-through=true)")
+        else:
+            print("[PROXY] Compression BYPASSED (BYPASS_COMPRESSION=true)")
     else:
         compressed_messages, was_compressed, orig_tokens, comp_tokens = process_and_compress_context(messages, disable_default_logging=disable_default_logging)
     

@@ -1,0 +1,80 @@
+{
+  "default_model": "openai/gpt-5.5",
+  "models": [
+    {
+      "id": "openai/gpt-5.5",
+      "label": "GPT-5.5",
+      "notes": "Latest flagship OpenAI model"
+    },
+    {
+      "id": "openai/gpt-5.4-mini",
+      "label": "GPT-5.4 Mini",
+      "notes": "Lower latency OpenAI 5.x option"
+    },
+    {
+      "id": "openai/gpt-5.4-nano",
+      "label": "GPT-5.4 Nano",
+      "notes": "Cheapest OpenAI 5.x option"
+    },
+    {
+      "id": "openai/gpt-4o",
+      "label": "GPT-4o",
+      "notes": "Stable fallback with broad compatibility"
+    },
+    {
+      "id": "openai/gpt-4o-mini",
+      "label": "GPT-4o Mini",
+      "notes": "Cost-effective fallback for bulk tests"
+    },
+    {
+      "id": "anthropic/claude-opus-4-7",
+      "label": "Claude Opus 4.7",
+      "notes": "Highest-capability Claude model"
+    },
+    {
+      "id": "anthropic/claude-sonnet-4-6",
+      "label": "Claude Sonnet 4.6",
+      "notes": "Balanced Claude model"
+    },
+    {
+      "id": "anthropic/claude-haiku-4-5",
+      "label": "Claude Haiku 4.5",
+      "notes": "Fast Claude model"
+    },
+    {
+      "id": "anthropic/claude-sonnet-4-5",
+      "label": "Claude Sonnet 4.5",
+      "notes": "Compatibility fallback used in current proxy aliases"
+    },
+    {
+      "id": "google/gemini-2.5-pro",
+      "label": "Gemini 2.5 Pro",
+      "notes": "High-quality Google model"
+    },
+    {
+      "id": "google/gemini-2.5-flash",
+      "label": "Gemini 2.5 Flash",
+      "notes": "Fast Google model"
+    },
+    {
+      "id": "google/gemini-2.5-flash-lite",
+      "label": "Gemini 2.5 Flash Lite",
+      "notes": "Cheaper Gemini 2.5 variant"
+    },
+    {
+      "id": "google/gemini-flash-1.5",
+      "label": "Gemini Flash 1.5",
+      "notes": "Compatibility fallback used in existing docs"
+    },
+    {
+      "id": "deepseek/deepseek-v4-pro",
+      "label": "DeepSeek V4 Pro",
+      "notes": "Latest DeepSeek higher-quality model"
+    },
+    {
+      "id": "deepseek/deepseek-v4-flash",
+      "label": "DeepSeek V4 Flash",
+      "notes": "Latest DeepSeek low-latency model"
+    }
+  ]
+}
