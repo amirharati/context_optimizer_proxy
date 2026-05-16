@@ -9,6 +9,7 @@
 # Covers: logs/sessions/*.jsonl, token_savings.jsonl, debug_buffer.json,
 #         last_request.json, cursor_tools_dump.json, fetches/, etc.
 logs/
+runs/
 
 # --- Python
 __pycache__/

@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from compressor import process_and_compress_context
 from logger import log_token_savings, session_logger, estimate_tokens
 from ui import router as ui_router
+from ab_testing.framework.strategies import apply_strategy
 
 # Load environment variables (API keys are automatically picked up by litellm)
 load_dotenv()
@@ -40,7 +41,9 @@ MODEL_ALIASES = {
     # --- Slash names (passthrough) ---
     "anthropic/claude-sonnet-4-5":          "anthropic/claude-sonnet-4-5",
     "anthropic/claude-3-5-sonnet-20241022": "anthropic/claude-3-5-sonnet-20241022",
+    "anthropic/claude-3-haiku":             "anthropic/claude-3-haiku-20240307",
     "anthropic/claude-3-haiku-20240307":    "anthropic/claude-3-haiku-20240307",
+    "anthropic/claude-3-opus":              "anthropic/claude-3-opus-20240229",
     "anthropic/claude-3-opus-20240229":     "anthropic/claude-3-opus-20240229",
     "openai/gpt-4o":                        "openai/gpt-4o",
     "openai/gpt-4o-mini":                   "openai/gpt-4o-mini",
@@ -111,6 +114,12 @@ async def chat_completions(request: Request):
     """
     body = await request.json()
     
+    # Extract API overrides from headers (useful for test scripts)
+    force_full_logging = request.headers.get("x-proxy-full-logging", "false").lower() == "true"
+    custom_log_dir = request.headers.get("x-proxy-log-dir")
+    # Explicit session key for A/B test framework — forces a fresh session per test run/strategy
+    session_key = request.headers.get("x-proxy-session-key")
+    
     # 1. Extract exactly what Cursor is asking for
     requested_model = body.get("model")
     messages = body.get("messages", [])
@@ -151,7 +160,16 @@ async def chat_completions(request: Request):
 
     # Cursor sends its own tool definitions for agentic features (file editing, terminal, etc.).
     # Some of these may have empty names which OpenRouter/Anthropic reject outright.
-    # 2. Evaluate and Compress the Context
+    # 2. Apply preprocessing strategies (noise stripping, etc.)
+    strategy = os.getenv("AB_TEST_STRATEGY", "none")
+    if strategy != "none":
+        try:
+            messages = apply_strategy(strategy, messages)
+            print(f"[PROXY] Applied preprocessing strategy: {strategy}")
+        except Exception as e:
+            print(f"[PROXY] Warning: Strategy {strategy} failed: {e}")
+    
+    # 3. Evaluate and Compress the Context
     bypass = os.getenv("BYPASS_COMPRESSION", "false").lower() == "true"
     if bypass:
         compressed_messages, was_compressed, orig_tokens, comp_tokens = messages, False, 0, 0
@@ -159,7 +177,7 @@ async def chat_completions(request: Request):
     else:
         compressed_messages, was_compressed, orig_tokens, comp_tokens = process_and_compress_context(messages)
     
-    # 3. Log the savings if compression occurred
+    # 4. Log the savings if compression occurred
     if was_compressed:
         cheap_model = os.getenv("CHEAP_MODEL_NAME", "openrouter/google/gemini-flash-1.5")
         log_token_savings(
@@ -169,7 +187,7 @@ async def chat_completions(request: Request):
             cheap_model_used=cheap_model
         )
 
-    # 4. Forward the request via LiteLLM
+    # 5. Forward the request via LiteLLM
     # LiteLLM automatically knows how to route to Anthropic, OpenAI, or OpenRouter 
     # based purely on the model string (e.g., "anthropic/claude-3-opus", "gpt-4o", "openrouter/...")
     # It will automatically use the correct API key from the .env file.
@@ -196,12 +214,50 @@ async def chat_completions(request: Request):
     print(f"[IN]  messages={len(messages)} compressed={was_compressed} {tools_summary} tool_choice={tool_choice!r} → {requested_model}")
 
     # Session logging — save every turn so we can analyse patterns later
-    raw_token_count = estimate_tokens("".join(
-        (m.get("content", "") if isinstance(m.get("content"), str)
-         else " ".join(p.get("text", "") for p in m.get("content", []) if isinstance(p, dict)))
-        for m in messages
-    ))
-    session_logger.log_turn(messages, requested_model, raw_token_count)
+    try:
+        def extract_text(m):
+            content = m.get("content")
+            if content is None:
+                return ""
+            if isinstance(content, str):
+                return content
+            if isinstance(content, list):
+                return " ".join(p.get("text", "") for p in content if isinstance(p, dict))
+            return ""
+
+        raw_token_count = estimate_tokens("".join(extract_text(m) for m in messages))
+        
+        # Extract system prompt: either from body.system or from first message with role="system"
+        system_prompt = body.get("system")
+        if not system_prompt and messages and messages[0].get("role") == "system":
+            system_prompt = messages[0].get("content", "")
+            
+        def log_this_turn(assistant_msg=None, actual_usage=None):
+            try:
+                msgs_to_log = list(compressed_messages)
+                if assistant_msg:
+                    msgs_to_log.append(assistant_msg)
+                
+                tokens = raw_token_count
+                if actual_usage and "total_tokens" in actual_usage:
+                    tokens = actual_usage["total_tokens"]
+                    
+                session_logger.log_turn(
+                    msgs_to_log, 
+                    requested_model, 
+                    tokens,
+                    force_full_logging=force_full_logging,
+                    custom_log_dir=custom_log_dir,
+                    session_key=session_key,
+                    system=system_prompt,
+                    tools=body.get("tools"),
+                )
+            except Exception as log_e:
+                print(f"[ERROR] Session logging failed: {log_e}")
+                
+    except Exception as e:
+        print(f"[ERROR] Logging preparation failed: {e}")
+        return {"error": f"Logging preparation failed: {e}"}
 
     # Dump full request body for debugging
     import pathlib
@@ -220,9 +276,56 @@ async def chat_completions(request: Request):
 
         # Build Anthropic-native request body from what Cursor already sent
         anthropic_model = requested_model.replace("anthropic/", "", 1)
+        
+        # Convert messages to Anthropic format
+        # OpenAI format assistant messages may have tool_calls, which need to be converted to content blocks
+        # OpenAI format "tool" role messages need to be converted to user messages with tool_result blocks
+        anthropic_messages = []
+        for msg in compressed_messages:
+            if msg.get("role") == "assistant" and "tool_calls" in msg:
+                # Convert OpenAI tool_calls to Anthropic content blocks
+                content_blocks = []
+                # Add text content if present
+                if msg.get("content"):
+                    content_blocks.append({"type": "text", "text": msg["content"]})
+                # Convert tool_calls to tool_use blocks
+                for tc in msg.get("tool_calls", []):
+                    fn = tc.get("function", {})
+                    content_blocks.append({
+                        "type": "tool_use",
+                        "id": tc.get("id", ""),
+                        "name": fn.get("name", ""),
+                        "input": json.loads(fn.get("arguments", "{}")) if isinstance(fn.get("arguments"), str) else fn.get("arguments", {}),
+                    })
+                anthropic_messages.append({
+                    "role": "assistant",
+                    "content": content_blocks
+                })
+            elif msg.get("role") == "tool":
+                # Anthropic doesn't support role="tool", convert to user message with tool_result
+                content = msg.get("content", "")
+                # Extract text from content if it's a list (Anthropic format)
+                if isinstance(content, list):
+                    text = " ".join(item.get("text", "") for item in content if isinstance(item, dict))
+                else:
+                    text = content
+                
+                tool_use_id = msg.get("tool_use_id") or msg.get("tool_call_id", "")
+                anthropic_messages.append({
+                    "role": "user",
+                    "content": [{
+                        "type": "tool_result",
+                        "tool_use_id": tool_use_id,
+                        "content": text
+                    }]
+                })
+            else:
+                # Keep user messages as-is
+                anthropic_messages.append(msg)
+        
         anthropic_body = {
             "model": anthropic_model,
-            "messages": compressed_messages,
+            "messages": anthropic_messages,
             "max_tokens": final_body.get("max_tokens", 8192),
             "stream": stream,
         }
@@ -248,6 +351,11 @@ async def chat_completions(request: Request):
                     anthropic_tools.append(t)
             anthropic_body["tools"] = anthropic_tools
 
+        # Debug: show what we're actually sending to Anthropic
+        print(f"[DEBUG] anthropic_body keys: {list(anthropic_body.keys())}")
+        print(f"[DEBUG] anthropic_body['system']: {anthropic_body.get('system', 'MISSING')[:80] if anthropic_body.get('system') else 'MISSING'}")
+        print(f"[DEBUG] anthropic_body['tools']: {len(anthropic_body.get('tools', []))} tools")
+        
         # Restore tool_choice to Anthropic format
         if "tool_choice" in anthropic_body:
             tc = anthropic_body["tool_choice"]
@@ -261,6 +369,7 @@ async def chat_completions(request: Request):
         }
 
         print(f"[PROXY] → Anthropic direct: {anthropic_model} stream={stream}")
+        print(f"[PROXY] Sending to Anthropic: system={'present' if anthropic_body.get('system') else 'MISSING'}, tools={len(anthropic_body.get('tools', []))} tools")
 
         try:
             if stream:
@@ -270,6 +379,9 @@ async def chat_completions(request: Request):
                     gen_id = f"chatcmpl-{uuid.uuid4().hex[:16]}"
                     created = int(time.time())
                     input_tokens = 0
+                    
+                    accumulated_content = ""
+                    accumulated_tool_calls = []
 
                     async with httpx.AsyncClient(timeout=300) as client:
                         async with client.stream(
@@ -307,6 +419,16 @@ async def chat_completions(request: Request):
                                     if btype == "tool_use":
                                         # Start of a tool call
                                         tool_idx = ev.get("index", 0)
+                                        # Ensure array is large enough
+                                        while len(accumulated_tool_calls) <= tool_idx:
+                                            accumulated_tool_calls.append({
+                                                "id": "",
+                                                "type": "function",
+                                                "function": {"name": "", "arguments": ""}
+                                            })
+                                        accumulated_tool_calls[tool_idx]["id"] = block.get("id", "")
+                                        accumulated_tool_calls[tool_idx]["function"]["name"] = block.get("name", "")
+                                        
                                         chunk = {"id": gen_id, "object": "chat.completion.chunk", "created": created,
                                                  "model": requested_model,
                                                  "choices": [{"index": 0, "delta": {
@@ -321,15 +443,20 @@ async def chat_completions(request: Request):
                                     dtype = delta.get("type")
                                     tool_idx = ev.get("index", 0)
                                     if dtype == "text_delta":
+                                        text = delta.get("text", "")
+                                        accumulated_content += text
                                         chunk = {"id": gen_id, "object": "chat.completion.chunk", "created": created,
                                                  "model": requested_model,
-                                                 "choices": [{"index": 0, "delta": {"content": delta.get("text", "")}, "finish_reason": None}]}
+                                                 "choices": [{"index": 0, "delta": {"content": text}, "finish_reason": None}]}
                                         yield f"data: {json.dumps(chunk)}\n\n"
                                     elif dtype == "input_json_delta":
+                                        partial = delta.get("partial_json", "")
+                                        if len(accumulated_tool_calls) > tool_idx:
+                                            accumulated_tool_calls[tool_idx]["function"]["arguments"] += partial
                                         chunk = {"id": gen_id, "object": "chat.completion.chunk", "created": created,
                                                  "model": requested_model,
                                                  "choices": [{"index": 0, "delta": {
-                                                     "tool_calls": [{"index": tool_idx, "function": {"arguments": delta.get("partial_json", "")}}]
+                                                     "tool_calls": [{"index": tool_idx, "function": {"arguments": partial}}]
                                                  }, "finish_reason": None}]}
                                         yield f"data: {json.dumps(chunk)}\n\n"
 
@@ -347,6 +474,14 @@ async def chat_completions(request: Request):
 
                                 elif etype == "message_stop":
                                     yield "data: [DONE]\n\n"
+                                    
+                    # Log at the end of stream
+                    assistant_msg = {"role": "assistant"}
+                    if accumulated_content:
+                        assistant_msg["content"] = accumulated_content
+                    if accumulated_tool_calls:
+                        assistant_msg["tool_calls"] = accumulated_tool_calls
+                    log_this_turn(assistant_msg=assistant_msg, actual_usage={"total_tokens": input_tokens + output_tokens})
 
                 return StreamingResponse(generate_anthropic_stream(), media_type="text/event-stream")
 
@@ -382,6 +517,7 @@ async def chat_completions(request: Request):
                                   "total_tokens": usage.get("input_tokens", 0) + usage.get("output_tokens", 0)},
                     }
                     print(f"[OUT] Anthropic response preview={text[:120]!r}")
+                    log_this_turn(assistant_msg=message, actual_usage=openai_resp["usage"])
                     return JSONResponse(openai_resp)
 
         except Exception as e:
@@ -402,15 +538,26 @@ async def chat_completions(request: Request):
         try:
             if stream:
                 async def generate_stream():
+                    accumulated_content = ""
                     async with httpx.AsyncClient(timeout=120) as client:
                         async with client.stream("POST", OPENROUTER_URL, json=final_body, headers=headers) as resp:
                             async for line in resp.aiter_lines():
                                 if line:
                                     print(f"[OUT] {line[:300]}")
                                     yield line + "\n\n"
+                                    if line.startswith("data: "):
+                                        try:
+                                            data = json.loads(line[6:])
+                                            delta = data.get("choices", [{}])[0].get("delta", {})
+                                            if "content" in delta and delta["content"]:
+                                                accumulated_content += delta["content"]
+                                        except Exception:
+                                            pass
+                    log_this_turn(assistant_msg={"role": "assistant", "content": accumulated_content})
 
                 return StreamingResponse(generate_stream(), media_type="text/event-stream")
             else:
+                print(f"[PROXY] Sending to OpenRouter: system={'present' if final_body.get('system') or any(m.get('role')=='system' for m in final_body.get('messages',[])) else 'MISSING'}, tools={len(final_body.get('tools', []))} tools")
                 async with httpx.AsyncClient(timeout=120) as client:
                     resp = await client.post(OPENROUTER_URL, json=final_body, headers=headers)
                     result = resp.json()
@@ -418,11 +565,16 @@ async def chat_completions(request: Request):
                         print(f"[ERROR] OpenRouter: {json.dumps(result['error'])}")
                     else:
                         content = result.get("choices", [{}])[0].get("message", {}).get("content", "")
-                        print(f"[OUT] response_preview={content[:120]!r}")
+                        print(f"[OUT] response_preview={(content or '')[:120]!r}")
+                        assistant_msg = result.get("choices", [{}] )[0].get("message", {})
+                        usage = result.get("usage", {})
+                        log_this_turn(assistant_msg=assistant_msg, actual_usage=usage)
                     return result
 
         except Exception as e:
+            import traceback
             print(f"[ERROR] Direct OpenRouter call failed: {e}")
+            print(f"[ERROR] Traceback: {traceback.format_exc()}")
             return {"error": str(e)}
 
 if __name__ == "__main__":

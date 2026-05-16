@@ -1,23 +1,69 @@
 """
 Session viewer UI — served at http://localhost:8000/ui
 Provides REST endpoints for the session browser.
+
+The UI supports two source modes:
+  1. Default: live proxy sessions in `logs/sessions/`
+  2. Run-scoped: A/B test sessions in `runs/<run_id>/sessions/`
+     Pass `?source=<run_id>` query param (e.g. `?source=run_20260515_223741`)
 """
 import json
 import os
 from pathlib import Path
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.responses import HTMLResponse, JSONResponse
 
 router = APIRouter()
-SESSIONS_DIR = Path(os.getenv("LOG_DIR", "logs")) / "sessions"
+LOG_DIR = Path(os.getenv("LOG_DIR", "logs"))
+DEFAULT_SESSIONS_DIR = LOG_DIR / "sessions"
+RUNS_DIR = Path("runs")  # A/B test artifact root
+
+
+def _resolve_sessions_dir(source: str | None) -> Path:
+    """
+    Resolve which sessions directory to read from based on `source` query.
+    
+    - source=None or "live": default proxy sessions dir
+    - source="<run_id>": runs/<run_id>/sessions
+    - source="logs": legacy/raw logs/sessions
+    """
+    if not source or source == "live" or source == "logs":
+        return DEFAULT_SESSIONS_DIR
+    # Look up the run dir under runs/
+    candidate = RUNS_DIR / source / "sessions"
+    if candidate.exists():
+        return candidate
+    return DEFAULT_SESSIONS_DIR
+
+
+@router.get("/runs")
+async def list_runs():
+    """List all available A/B test runs (folders under runs/)."""
+    if not RUNS_DIR.exists():
+        return JSONResponse([])
+    runs = []
+    for d in sorted(RUNS_DIR.glob("run_*"), key=lambda p: p.stat().st_mtime, reverse=True):
+        if not d.is_dir():
+            continue
+        sessions_dir = d / "sessions"
+        report_file = d / "report.json"
+        session_count = len(list(sessions_dir.glob("session_*.jsonl"))) if sessions_dir.exists() else 0
+        runs.append({
+            "id": d.name,
+            "session_count": session_count,
+            "has_report": report_file.exists(),
+            "mtime": d.stat().st_mtime,
+        })
+    return JSONResponse(runs)
 
 
 @router.get("/sessions")
-async def list_sessions():
-    if not SESSIONS_DIR.exists():
+async def list_sessions(source: str | None = Query(None)):
+    sessions_dir = _resolve_sessions_dir(source)
+    if not sessions_dir.exists():
         return JSONResponse([])
     sessions = []
-    for f in sorted(SESSIONS_DIR.glob("session_*.jsonl"), key=lambda p: p.stat().st_mtime):
+    for f in sorted(sessions_dir.glob("session_*.jsonl"), key=lambda p: p.stat().st_mtime):
         turns = []
         with open(f, encoding="utf-8") as fh:
             for line in fh:
@@ -32,7 +78,7 @@ async def list_sessions():
             "file": f.name,
             "turns": len(turns),
             "model": turns[-1].get("model", "?"),
-            "peak_tokens": max(t.get("estimated_tokens", 0) for t in turns),
+            "total_tokens": sum(t.get("estimated_tokens", 0) for t in turns),
             "start_time": turns[0].get("timestamp", ""),
             "end_time": turns[-1].get("timestamp", ""),
         })
@@ -40,8 +86,9 @@ async def list_sessions():
 
 
 @router.get("/sessions/{session_id}")
-async def get_session(session_id: str):
-    path = SESSIONS_DIR / f"session_{session_id}.jsonl"
+async def get_session(session_id: str, source: str | None = Query(None)):
+    sessions_dir = _resolve_sessions_dir(source)
+    path = sessions_dir / f"session_{session_id}.jsonl"
     if not path.exists():
         return JSONResponse({"error": "not found"}, status_code=404)
     turns = []
@@ -80,6 +127,9 @@ HTML = r"""<!DOCTYPE html>
   /* Sidebar */
   .sidebar-header { padding: 16px; border-bottom: 1px solid #2d3748; }
   .sidebar-header h1 { font-size: 14px; font-weight: 600; color: #a0aec0; letter-spacing: .05em; text-transform: uppercase; }
+  .source-select { width: 100%; margin-top: 10px; padding: 6px 8px; background: #0f1117;
+                    border: 1px solid #2d3748; border-radius: 6px; color: #e2e8f0; font-size: 12px; }
+  .source-select:focus { outline: none; border-color: #4299e1; }
   .session-item { padding: 12px 16px; cursor: pointer; border-bottom: 1px solid #1e2533; transition: background .1s; }
   .session-item:hover { background: #1e2a3a; }
   .session-item.active { background: #1e3a5f; border-left: 3px solid #4299e1; }
@@ -150,7 +200,12 @@ HTML = r"""<!DOCTYPE html>
 <body>
 <div id="app">
   <div id="sidebar">
-    <div class="sidebar-header"><h1>Sessions</h1></div>
+    <div class="sidebar-header">
+      <h1>Sessions</h1>
+      <select id="source-select" class="source-select" onchange="onSourceChange()">
+        <option value="live">Live proxy (logs/sessions)</option>
+      </select>
+    </div>
     <div id="session-list"><div class="loading">Loading...</div></div>
   </div>
   <div id="main">
@@ -161,16 +216,51 @@ HTML = r"""<!DOCTYPE html>
 <script>
 const BASE = window.location.origin;
 let activeSid = null;
+let currentSource = 'live';
+
+async function loadRuns() {
+  // Populate the source dropdown with available A/B test runs
+  try {
+    const res = await fetch(`${BASE}/runs`);
+    const runs = await res.json();
+    const sel = document.getElementById('source-select');
+    // Keep the default "live" option, then append runs
+    const liveOpt = sel.options[0];
+    sel.innerHTML = '';
+    sel.appendChild(liveOpt);
+    runs.forEach(r => {
+      const opt = document.createElement('option');
+      opt.value = r.id;
+      opt.textContent = `${r.id} (${r.session_count} sessions)`;
+      sel.appendChild(opt);
+    });
+    sel.value = currentSource;
+  } catch (e) {
+    console.warn('Failed to load runs', e);
+  }
+}
+
+function onSourceChange() {
+  const sel = document.getElementById('source-select');
+  currentSource = sel.value;
+  activeSid = null;
+  document.getElementById('main').innerHTML = '<div class="empty">Select a session from the sidebar</div>';
+  loadSessions();
+}
+
+function sourceQuery() {
+  return currentSource && currentSource !== 'live' ? `?source=${encodeURIComponent(currentSource)}` : '';
+}
 
 async function loadSessions() {
-  const res = await fetch(`${BASE}/sessions`);
+  const res = await fetch(`${BASE}/sessions${sourceQuery()}`);
   const sessions = await res.json();
   const list = document.getElementById('session-list');
   if (!sessions.length) { list.innerHTML = '<div class="loading">No sessions yet.</div>'; return; }
   list.innerHTML = sessions.map(s => `
     <div class="session-item" onclick="loadSession('${s.id}')" id="sid-${s.id}">
       <div class="sid">${s.id}</div>
-      <div style="font-size:13px;margin-top:2px;">${s.turns} turns &nbsp;·&nbsp; ${s.peak_tokens.toLocaleString()} tok</div>
+      <div style="font-size:13px;margin-top:2px;">${s.turns} turns &nbsp;·&nbsp; ${s.total_tokens.toLocaleString()} tok</div>
       <div class="meta">${s.start_time.slice(11,19)} → ${s.end_time.slice(11,19)} UTC</div>
       <div class="model-tag">${s.model.split('/').pop()}</div>
     </div>`).join('');
@@ -182,15 +272,20 @@ async function loadSession(sid) {
   document.getElementById('sid-'+sid)?.classList.add('active');
   const main = document.getElementById('main');
   main.innerHTML = '<div class="loading">Loading session...</div>';
-  const res = await fetch(`${BASE}/sessions/${sid}`);
+  const res = await fetch(`${BASE}/sessions/${sid}${sourceQuery()}`);
   const turns = await res.json();
   renderSession(sid, turns, main);
 }
 
 function renderSession(sid, turns, container) {
-  const peakTok = Math.max(...turns.map(t => t.estimated_tokens || 0));
+  const totalTok = turns.reduce((acc, t) => acc + (t.estimated_tokens || 0), 0);
   const models = [...new Set(turns.map(t => t.model.split('/').pop()))];
   const errorCount = turns.filter(t => hasError(t)).length;
+
+  // Get system prompt and tools from first turn
+  const firstTurn = turns[0] || {};
+  const hasSystem = !!firstTurn.system;
+  const hasTools = firstTurn.tools && firstTurn.tools.length > 0;
 
   container.innerHTML = `
     <div class="turns-header">
@@ -199,9 +294,12 @@ function renderSession(sid, turns, container) {
     </div>
     <div class="stats-row">
       <div class="stat-box"><div class="val">${turns.length}</div><div class="lbl">Turns</div></div>
-      <div class="stat-box"><div class="val">${peakTok.toLocaleString()}</div><div class="lbl">Peak tokens</div></div>
+      <div class="stat-box"><div class="val">${totalTok.toLocaleString()}</div><div class="lbl">Total tokens</div></div>
       <div class="stat-box"><div class="val">${errorCount}</div><div class="lbl">Error turns</div></div>
+      ${hasSystem ? '<div class="stat-box"><div class="val">✓</div><div class="lbl">System Prompt</div></div>' : ''}
+      ${hasTools ? `<div class="stat-box"><div class="val">${firstTurn.tools.length}</div><div class="lbl">Tools</div></div>` : ''}
     </div>
+    ${hasSystem || hasTools ? renderSystemAndTools(firstTurn) : ''}
     <div id="turn-list"></div>`;
 
   const tl = document.getElementById('turn-list');
@@ -226,6 +324,71 @@ function renderSession(sid, turns, container) {
       <div class="turn-body" id="body-${domId}">${renderMessages(newMsgs)}</div>`;
     tl.appendChild(div);
   });
+}
+
+function renderSystemAndTools(turn) {
+  const parts = [];
+  
+  if (turn.system) {
+    parts.push(`
+      <div class="turn-row" style="margin-bottom: 16px;">
+        <div class="turn-header" onclick="toggleTurn('system-prompt')" style="background: #1a2433;">
+          <span class="turn-num">📋</span>
+          <span class="turn-summary">System Prompt</span>
+          <span class="caret" id="caret-system-prompt">&#9658;</span>
+        </div>
+        <div class="turn-body" id="body-system-prompt">
+          <div class="msg-block">
+            <div class="role-label role-system">system</div>
+            <div class="part-row">
+              <span class="part-tag tag-text">prompt</span>
+              <div style="min-width:0;flex:1">
+                <div class="part-content">${escHtml(turn.system)}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `);
+  }
+  
+  if (turn.tools && turn.tools.length > 0) {
+    const toolsList = turn.tools.map((t, i) => {
+      const fn = t.function || t;
+      const name = fn.name || '?';
+      const desc = fn.description || '';
+      const uid = 'tool-' + Math.random().toString(36).slice(2);
+      const short = desc.slice(0, 80);
+      const long = desc.length > 80;
+      FULL_TEXTS[uid] = desc;
+      return `
+        <div class="part-row" style="margin-bottom: 8px;">
+          <span class="part-tag" style="background: #1e3a5f; color: #90cdf4;">${name}</span>
+          <div style="min-width:0;flex:1">
+            <div class="part-content" id="${uid}" style="font-size: 11px; color: #a0aec0;">${escHtml(short)}${long ? '…' : ''}</div>
+            ${long ? `<button class="expand-btn" onclick="expandPart('${uid}')">Show full description</button>` : ''}
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    parts.push(`
+      <div class="turn-row" style="margin-bottom: 16px;">
+        <div class="turn-header" onclick="toggleTurn('tools-list')" style="background: #1a2433;">
+          <span class="turn-num">🔧</span>
+          <span class="turn-summary">${turn.tools.length} Available Tools</span>
+          <span class="caret" id="caret-tools-list">&#9658;</span>
+        </div>
+        <div class="turn-body" id="body-tools-list">
+          <div class="msg-block">
+            ${toolsList}
+          </div>
+        </div>
+      </div>
+    `);
+  }
+  
+  return parts.join('');
 }
 
 function toggleTurn(id) {
@@ -353,8 +516,8 @@ function escHtml(s) {
   return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
-loadSessions();
-setInterval(loadSessions, 30000);
+loadRuns().then(loadSessions);
+setInterval(() => { loadRuns(); loadSessions(); }, 30000);
 </script>
 </body>
 </html>"""

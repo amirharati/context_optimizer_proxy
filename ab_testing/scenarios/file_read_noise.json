@@ -1,0 +1,31 @@
+{
+  "name": "File read with shell operations",
+  "description": "Tests noise stripping on a mix of Read and Shell tools. More realistic scenario with multiple operations.",
+  "system_prompt": "You are a helpful coding assistant. Use the Read and Shell tools to help the user understand and test their code.",
+  "available_tools": ["Read", "Shell"],
+  "virtual_fs": {
+    "/workspace/calculator.py": "def add(a, b):\n    return a + b\n\ndef subtract(a, b):\n    return a - b\n\nif __name__ == '__main__':\n    print('Calculator ready')\n",
+    "/workspace/test_calculator.py": "from calculator import add, subtract\n\nassert add(2, 3) == 5\nassert subtract(5, 2) == 3\nprint('All tests passed!')\n"
+  },
+  "shell_responses": {
+    "python test_calculator.py": {
+      "exit_code": 0,
+      "stdout": "All tests passed!\n",
+      "stderr": "",
+      "duration_ms": 234
+    },
+    "ls -la": {
+      "exit_code": 0,
+      "stdout": "total 16\ndrwxr-xr-x  4 user  staff   128 May 15 15:00 .\ndrwxr-xr-x  8 user  staff   256 May 15 14:55 ..\n-rw-r--r--  1 user  staff   156 May 15 15:00 calculator.py\n-rw-r--r--  1 user  staff   128 May 15 15:00 test_calculator.py\n",
+      "stderr": "",
+      "duration_ms": 92
+    }
+  },
+  "initial_cwd": "/workspace",
+  "turns": [
+    {
+      "role": "user",
+      "content": "Read the calculator.py file and run its tests to make sure everything works."
+    }
+  ]
+}

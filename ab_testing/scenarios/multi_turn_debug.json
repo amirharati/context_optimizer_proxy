@@ -1,0 +1,50 @@
+{
+  "name": "Multi-turn debugging session",
+  "description": "Realistic debugging scenario with multiple tool calls and iterations",
+  "system_prompt": "You are an expert Python debugger. Use tools to diagnose and fix the issue.",
+  "available_tools": ["Read", "Shell"],
+  "virtual_fs": {
+    "/workspace/app.py": "def calculate_average(numbers):\n    total = sum(numbers)\n    count = len(numbers)\n    return total / count\n\ndata = [1, 2, 3, 4, 5]\nresult = calculate_average(data)\nprint(f'Average: {result}')",
+    "/workspace/test.py": "from app import calculate_average\n\n# Test with empty list\ntry:\n    result = calculate_average([])\n    print(f'Empty list result: {result}')\nexcept ZeroDivisionError:\n    print('ERROR: Division by zero with empty list')\n\n# Test with valid data\nresult = calculate_average([10, 20, 30])\nprint(f'Valid data result: {result}')",
+    "/workspace/requirements.txt": "pytest==7.4.0\nblack==23.7.0\npylint==2.17.0"
+  },
+  "shell_responses": {
+    "python /workspace/test.py": {
+      "exit_code": 1,
+      "stdout": "ERROR: Division by zero with empty list\n",
+      "stderr": "Traceback (most recent call last):\n  File \"/workspace/test.py\", line 12, in <module>\n    result = calculate_average([10, 20, 30])\n  File \"/workspace/app.py\", line 4, in calculate_average\n    return total / count\nZeroDivisionError: division by zero\n",
+      "duration_ms": 234
+    },
+    "cat /workspace/app.py": {
+      "exit_code": 0,
+      "stdout": "def calculate_average(numbers):\n    total = sum(numbers)\n    count = len(numbers)\n    return total / count\n\ndata = [1, 2, 3, 4, 5]\nresult = calculate_average(data)\nprint(f'Average: {result}')",
+      "stderr": "",
+      "duration_ms": 89
+    },
+    "python -m pylint /workspace/app.py": {
+      "exit_code": 0,
+      "stdout": "Your code has been rated at 10.00/10 (previous run: 10.00/10, +0.00)",
+      "stderr": "",
+      "duration_ms": 567
+    },
+    "python /workspace/app.py": {
+      "exit_code": 0,
+      "stdout": "Average: 3.0\n",
+      "stderr": "",
+      "duration_ms": 123
+    },
+    "python -c \"from app import calculate_average; print(calculate_average([]))\"": {
+      "exit_code": 1,
+      "stdout": "",
+      "stderr": "Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"/workspace/app.py\", line 4, in calculate_average\n    return total / count\nZeroDivisionError: division by zero\n",
+      "duration_ms": 156
+    }
+  },
+  "initial_cwd": "/workspace",
+  "turns": [
+    {
+      "role": "user",
+      "content": "Debug the test.py file. It seems to be failing when processing empty lists. Can you find the issue?"
+    }
+  ]
+}

@@ -65,23 +65,44 @@ class SessionLogger:
             return False
         return self._msg_hash(messages) == self._first_msg_hash
 
-    def log_turn(self, messages: list, model: str, token_count: int) -> tuple[str, int]:
+    def log_turn(self, messages: list, model: str, token_count: int, force_full_logging: bool = False, custom_log_dir: str = None, session_key: str = None, system: str = None, tools: list = None) -> tuple[str, int]:
         """
         Log one proxy turn. Returns (session_id, turn_number).
         
-        If ENABLE_FULL_SESSION_LOGGING is true: saves full messages for analysis
+        If ENABLE_FULL_SESSION_LOGGING (or force_full_logging) is true: saves full messages for analysis
         If false (default): saves only metadata (tokens, model, counts) to save disk space
+        
+        If session_key is provided, it forces a specific session (used by A/B test
+        framework to keep each run/strategy as its own session even when first
+        messages are identical).
+        
+        system and tools are optional fields that will be logged when full logging is enabled.
         """
         import uuid
 
-        if self._is_continuation(messages):
+        # Explicit session key overrides hash-based detection (used by A/B tests)
+        if session_key:
+            if self._session_id != session_key:
+                # New session boundary - reset turn counter
+                self._session_id = session_key
+                self._turn = 1
+                self._first_msg_hash = self._msg_hash(messages)
+            else:
+                self._turn += 1
+        elif self._is_continuation(messages):
             self._turn += 1
         else:
             self._session_id = uuid.uuid4().hex[:8]
             self._turn = 1
             self._first_msg_hash = self._msg_hash(messages)
 
-        session_file = os.path.join(SESSIONS_DIR, f"session_{self._session_id}.jsonl")
+        out_dir = SESSIONS_DIR
+        if custom_log_dir:
+            # If custom_log_dir is provided, put it under LOG_DIR
+            out_dir = os.path.join(LOG_DIR, custom_log_dir)
+            os.makedirs(out_dir, exist_ok=True)
+
+        session_file = os.path.join(out_dir, f"session_{self._session_id}.jsonl")
 
         entry = {
             "session_id": self._session_id,
@@ -92,9 +113,15 @@ class SessionLogger:
             "estimated_tokens": token_count,
         }
 
+        do_full_logging = ENABLE_FULL_SESSION_LOGGING or force_full_logging
+
         # Only save full messages if full logging is enabled
-        if ENABLE_FULL_SESSION_LOGGING:
+        if do_full_logging:
             entry["messages"] = messages
+            if system:
+                entry["system"] = system
+            if tools:
+                entry["tools"] = tools
         else:
             # Minimal logging: just save user message preview and assistant message count
             user_msg = next((m.get("content", "")[:200] for m in reversed(messages) if m.get("role") == "user"), "")
@@ -104,7 +131,7 @@ class SessionLogger:
         with open(session_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
-        log_type = "FULL" if ENABLE_FULL_SESSION_LOGGING else "MINIMAL"
+        log_type = "FULL" if do_full_logging else "MINIMAL"
         print(f"[SESSION:{log_type}] {self._session_id} turn={self._turn} msgs={len(messages)} ~{token_count}tok → {model}")
         return self._session_id, self._turn
 

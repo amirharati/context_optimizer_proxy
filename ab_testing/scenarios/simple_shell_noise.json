@@ -1,0 +1,30 @@
+{
+  "name": "Simple shell with noise",
+  "description": "Tests noise stripping on shell command output. LLM runs a simple Python script and sees boilerplate-heavy output.",
+  "system_prompt": "You are a helpful coding assistant. Use the Read and Shell tools as needed to help the user.",
+  "available_tools": ["Read", "Shell"],
+  "virtual_fs": {
+    "/workspace/hello.py": "print('Hello, World!')\n"
+  },
+  "shell_responses": {
+    "python hello.py": {
+      "exit_code": 0,
+      "stdout": "Hello, World!\n",
+      "stderr": "",
+      "duration_ms": 145
+    },
+    "ls": {
+      "exit_code": 0,
+      "stdout": "hello.py\n",
+      "stderr": "",
+      "duration_ms": 89
+    }
+  },
+  "initial_cwd": "/workspace",
+  "turns": [
+    {
+      "role": "user",
+      "content": "What files are in the current directory, and can you run the Python script?"
+    }
+  ]
+}

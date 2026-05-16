@@ -1,0 +1,34 @@
+{
+  "name": "Fix Bug Execution Test",
+  "description": "Tests if the LLM can fix a bug and verifies it by actually executing the code.",
+  "system_prompt": "You are a helpful coding assistant. Use the Read, Write, and Shell tools as needed.",
+  "available_tools": ["Read", "Write", "Shell"],
+  "initial_cwd": "/workspace",
+  "virtual_fs": {
+    "math_utils.py": "def add(a, b):\n    return a - b\n",
+    "test_math.py": "import sys\nfrom math_utils import add\n\nif add(2, 3) != 5:\n    print('Test failed!')\n    sys.exit(1)\nprint('Test passed!')\nsys.exit(0)\n"
+  },
+  "shell_responses": {},
+  "turns": [
+    {
+      "role": "user",
+      "content": "There is a bug in math_utils.py. Please read the file, fix the bug by writing the correct code back, and then run `python test_math.py` to verify."
+    }
+  ],
+  "success_criteria": [
+    {
+      "type": "file_contains",
+      "path": "math_utils.py",
+      "expected_text": "return a + b"
+    },
+    {
+      "type": "run_command",
+      "command": "python test_math.py",
+      "timeout": 5
+    },
+    {
+      "type": "max_turns",
+      "value": 5
+    }
+  ]
+}
